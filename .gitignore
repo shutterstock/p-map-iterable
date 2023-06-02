@@ -1,0 +1,8 @@
+.idea/
+node_modules
+dist/
+*.tsbuildinfo
+*.log
+.nyc_output/
+coverage/
+.DS_Store

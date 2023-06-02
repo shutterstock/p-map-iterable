@@ -1,0 +1,45 @@
+{
+  "name": "@shutterstock/p-map-iterable",
+  "version": "1.0.0",
+  "description": "Async iterable that maps an async iterable input with backpressure.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc --build tsconfig.json",
+    "test": "jest",
+    "lint": "eslint ./ --ext .ts --ext .tsx",
+    "lint-and-fix": "eslint ./ --ext .ts --ext .tsx --fix"
+  },
+  "files": [
+    "dist/",
+    "LICENSE.md",
+    "package.json"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/shutterstock/p-map-iterable.git"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "aggregate-error": "^3.0.0"
+  },
+  "peerDependencies": {
+    "aggregate-error": "^3.0.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^27.0.0",
+    "@typescript-eslint/eslint-plugin": "^5.13.0",
+    "@typescript-eslint/parser": "^5.13.0",
+    "eslint": "^7.15.0",
+    "eslint-config-prettier": "^7.0.0",
+    "eslint-plugin-prettier": "^3.2.0",
+    "jest": "^27.0.0",
+    "prettier": "^2.2.1",
+    "ts-jest": "^27.0.0",
+    "ts-node": "^9.0.0",
+    "typescript": "^4.6.0"
+  }
+}

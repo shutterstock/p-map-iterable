@@ -37,4 +37,4 @@ jobs:
 
       - name: Publish with CLI to Code Artifact
         run: |
-          npm publish --access public --ignore-scripts --dry-run
+          npm publish --access public --ignore-scripts

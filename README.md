@@ -12,6 +12,22 @@ These classes will typically be helpful in batch or queue consumers, not as much
 
 `npm i @shutterstock/p-map-iterable`
 
+# `p-map-iterable` vs `p-map` vs `p-queue`
+
+These diagrams illustrate the differences in operation betweeen `p-map`, `p-queue`, and `p-map-iterable`.
+
+## `p-map-iterable`
+
+![p-map-iterable operations overview](https://github.com/shutterstock/p-map-iterable/assets/5617868/abdc7079-8c12-4518-8135-867fc5085e60)
+
+## `p-map`
+
+![p-map operations overview](https://github.com/shutterstock/p-map-iterable/assets/5617868/2fd88213-3135-4de8-8ec2-224555c08d65)
+
+## `p-queue`
+
+![p-queue operations overview](https://github.com/shutterstock/p-map-iterable/assets/5617868/88300edb-7bfe-41f0-ae5b-1cd5723bc255)
+
 # Features
 
 - `IterableMapper`

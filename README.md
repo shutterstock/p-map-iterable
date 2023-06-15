@@ -8,6 +8,19 @@ A common use case for `@shutterstock/p-map-iterable` is as a "prefetcher" that w
 
 These classes will typically be helpful in batch or queue consumers, not as much in request/response services.
 
+# Example Usage Scenario
+
+- AWS Lambda function for Kafka or Kinesis stream processing
+- Each invocation has a batch of, say, 100 records
+- Each record points to a file on S3 that needs to be parsed, processed, then written back to S3
+- The average file size is 50 MB, so these will take a few seconds to fetch and write
+- The Lambda function has 1,769 MB of RAM which gives it 1 vCPU, allowing the JS thread to run at roughly 100% speed of 1 core
+- If the code never waits to fetch or write files then the Lambda function will be able to use 100% of the paid-for CPU time
+- If there is no back pressure then reading 100 * 50 MB files would fill up the default Lambda temp disk space of 512 MB OR would consume 5 GB of memory, which would cause the Lambda function to fail
+- We can use `IterableMapper` to fetch up to 5 of the next files while the current file is being processed, then pause until the current file is processed and the next file is consumed
+- We can also use `IterableQueueMapper.enqueue()` to write the files back to S3 without waiting for them to finish, unless we get more than, say, 3-4 files being uploaded at once, at which point we can pause until the current file is uploaded before we allow queuing another file for upload
+- In the rare case that 3-4 files are uploading, but not yet finished, we would block on `.enqueue()` and not consume much CPU while waiting for at least 1 upload to finish
+
 # Installation
 
 `npm i @shutterstock/p-map-iterable`

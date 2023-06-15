@@ -4,7 +4,7 @@ interface IterableQueueOptions {
   /**
    * Number of pending unread iterable items.
    *
-   * Must be an integer from 0 and up or `Infinity`, must be >= `concurrency`.
+   * Must be an integer from 0 and up or `Infinity`.
    *
    * @default 8
    */
@@ -16,7 +16,7 @@ export class IterableQueue<Element>
   implements AsyncIterable<Element>
 {
   /**
-   *
+   * Exposes an `AsyncIterable` interface for the `BlockingQueue`.
    */
   constructor(options: IterableQueueOptions = {}) {
     super(options);

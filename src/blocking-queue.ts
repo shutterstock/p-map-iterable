@@ -41,7 +41,11 @@ export class BlockingQueue<Element> {
   private _doneAdding = false;
 
   /**
-   *
+   * - Maintains a maximum queue depth
+   * - Blocks `enqueue` when the queue is full, until an item is read with `dequeue`, or done
+   * - Blocks `dequeue` when the queue is empty, until an item is added with `enqueue`, or done
+   * - `done` must be called when no more items will be added
+   * - When `dequeue` returns `undefined` there are no more items and processing is complete
    */
   constructor({ maxUnread = 8 }: BlockingQueueOptions = {}) {
     this._options = { maxUnread };
@@ -185,25 +189,25 @@ export class BlockingQueue<Element> {
     return false;
   }
 
-  /**
-   * Waits for an item to be ready in the queue
-   * @returns Item from the ready queue
-   */
-  private async readWhenReady(): Promise<Element | undefined> {
-    // If there are waiters, create a waiter promise and add to end of list
-    // Note: the background reader removes the promise from the readers waiting queue
-    const itemReady = new Promise((resolve) => {
-      this._readersWaiting.enqueue(resolve);
-    });
+  // /**
+  //  * Waits for an item to be ready in the queue
+  //  * @returns Item from the ready queue
+  //  */
+  // private async readWhenReady(): Promise<Element | undefined> {
+  //   // If there are waiters, create a waiter promise and add to end of list
+  //   // Note: the background reader removes the promise from the readers waiting queue
+  //   const itemReady = new Promise((resolve) => {
+  //     this._readersWaiting.enqueue(resolve);
+  //   });
 
-    // Wait for our item to be ready
-    await itemReady;
+  //   // Wait for our item to be ready
+  //   await itemReady;
 
-    const item = this._unreadQueue.dequeue();
+  //   const item = this._unreadQueue.dequeue();
 
-    // Pull the item from the front
-    return item;
-  }
+  //   // Pull the item from the front
+  //   return item;
+  // }
 
   /**
    * Waits for an item to be ready in the queue

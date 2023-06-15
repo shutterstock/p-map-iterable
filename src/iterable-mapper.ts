@@ -86,10 +86,6 @@ export class IterableMapper<Element, NewElement> implements AsyncIterable<NewEle
    *                    maxUnread: max unread mapped results - this waits for results to be read,
    *                    stopOnError: return if a mapper throws - note that any other running mappers will then not be able to return results
    *                  }
-   * @returns A `Promise` that is fulfilled when all promises in `input`
-   * and ones returned from `mapper` are fulfilled, or rejects if any of the
-   * promises reject. The fulfilled value is an `Array` of the fulfilled
-   * values returned from `mapper` in `input` order.
    */
   constructor(
     iterable: AsyncIterable<Element> | Iterable<Element>,

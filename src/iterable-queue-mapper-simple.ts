@@ -21,7 +21,6 @@ export class IterableQueueMapperSimple<Element> {
    *
    * @param opts.concurrency - Number of items to accept for mapping before requiring the caller to wait for one to complete. - Default 4
    */
-
   constructor(mapper: Mapper<Element, void>, opts: { concurrency?: number } = {}) {
     const { concurrency = 4 } = opts;
 
@@ -54,7 +53,7 @@ export class IterableQueueMapperSimple<Element> {
   }
 
   /**
-   * Accumulated errors from background `send`'s
+   * Accumulated errors from background `mappers`s
    */
   public get errors(): Errors {
     return this._errors;
@@ -66,7 +65,7 @@ export class IterableQueueMapperSimple<Element> {
    * This provides concurrency background writes with back pressure to prevent
    * the caller from getting too far ahead.
    *
-   * MUST await `onIdle` for background `send`'s to finish
+   * MUST await `onIdle` for background `mappers`'s to finish
    * @param item
    */
   public async enqueue(item: Element): Promise<void> {

@@ -1,10 +1,12 @@
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT) [![Build - CI](https://github.com/shutterstock/p-map-iterable/actions/workflows/ci.yml/badge.svg)](https://github.com/shutterstock/p-map-iterable/actions/workflows/ci.yml) [![Package and Publish](https://github.com/shutterstock/p-map-iterable/actions/workflows/publish.yml/badge.svg)](https://github.com/shutterstock/p-map-iterable/actions/workflows/publish.yml)
 
 # Overview
 
-Async iterable that maps an async iterable input with backpressure.
+`@shutterstock/p-map-iterable` provides several classes that allow processing results of `p-map`-style mapper functions by iterating the results as they are completed, with back pressure to limit the number of items that are processed ahead of the consumer.
 
-A common use case for `pMapIterable` is as a "prefetcher" that will fetch, for example, DB or remote REST responses. By prefetching items the consumer is able to use 100% of the JS thread time for processing prefetched items instead of waiting for an item to arrive after each item is processed. This use case is most common in batch or queue consumers, not as much in request/response services.
+A common use case for `@shutterstock/p-map-iterable` is as a "prefetcher" that will fetch, for example, AWS S3 files in an AWS Lambda function. By prefetching large files the consumer is able to use 100% of the paid-for Lambda CPU time for the JS thread, rather than waiting idle while the next file is fetched. The backpressure (set by `maxUnread`) prevents the prefetcher from consuming unlimited memory or disk space by racing ahead of the consumer.
+
+These classes will typically be helpful in batch or queue consumers, not as much in request/response services.
 
 # Installation
 
@@ -19,11 +21,25 @@ A common use case for `pMapIterable` is as a "prefetcher" that will fetch, for e
   - Exposes an async iterable interface for consuming mapped items
   - Allows a maximum queue depth of mapped items - if the consumer stops consuming, the queue will fill up, at which point the mapper will stop being invoked until an item is consumed from the queue
   - This allows mapping with back pressure so that the mapper does not consume unlimited resources (e.g. memory, disk, network, event loop time) by racing ahead of the consumer
-- `IterableMapperSimple`
+- `IterableQueueMapper`
   - Wraps `IterableMapper`
+  - Adds items to the queue via the `enqueue` method
+- `IterableQueueMapperSimple`
+  - Wraps `IterableQueueMapper`
   - Discards results as they become available
   - Exposes any accumulated errors through the `errors` property instead of throwing an `AggregateError`
-  - Retains the backpressure functionality of `IterableMapper`'s `enqueue` in that addtional items cannot be added if the max number of items are already queued and their mappers have not yet completed, but does not require that the results be read by the caller before the next item can be mapped since the results are discarded immediately after they are available
+  - Not actually `Iterable` - May rename this before 1.0.0
+
+## Lower Level Utilities
+- `IterableQueue`
+  - Lower level utility class
+  - Wraps `BlockingQueue`
+  - Exposes an async iterable interface for consuming items in the queue
+- `BlockingQueue`
+  - Lower level utility class
+  - `dequeue` blocks until an item is available or until all items have been removed, then returns `undefined`
+  - `enqueue` blocks if the queue is full
+  - `done` signals that no more items will be added to the queue
 
 # `IterableMapper`
 
@@ -31,75 +47,25 @@ See [p-map](https://github.com/sindresorhus/p-map) docs for a good start in unde
 
 The key difference between `IterableMapper` and `pMap` are that `IterableMapper` does not return when the entire mapping is done, rather it exposes an iterable that the caller loops through. This enables results to be processed while the mapping is still happening, while optionally allowing for back pressure to slow or stop the mapping if the caller is not consuming items fast enough. Common use cases include `prefetching` items from a remote service - the next set of requests are dispatched asyncronously while the current responses are processed and the prefetch requests will pause when the unread queue fills up.
 
-```typescript
-import { IterableMapper } from '@shutterstock/p-map-iterable';
-import { promisify } from 'util';
-const sleep = promisify(setTimeout);
+See [examples/iterable-queue.ts](./examples/iterable-queue.ts) for an example.
 
-class SleepIterator implements AsyncIterable<number> {
-  private _max: number;
-  private _current = 1;
+Run the example with `npm run example:iterable-queue`
 
-  constructor(max: number) {
-    this._max = max;
-  }
+# `IterableQueueMapper`
 
-  async *[Symbol.asyncIterator](): AsyncIterator<number> {
-    for (let i = 0; i < this._max; i++) {
-      await sleep(1 * (i % 10));
+`IterableQueueMapper` is similar to `IterableMapper` but instead of taking an iterable input it instead adds data via the `enqueue` method which will block if `maxUnread` will be reached by the current number of `mapper`'s running in parallel.
 
-      if (this._current <= this._max) {
-        yield this._current;
-      }
+See [examples/iterable-queue-mapper.ts](./examples/iterable-queue-mapper.ts) for an example.
 
-      this._current++;
-    }
-  }
-}
+Run the example with `npm run example:iterable-queue-mapper`
 
-const max = 100;
-const iterator = new SleepIterator(max);
-let total = 0;
-let callCount = 0;
+# `IterableQueueMapperSimple`
 
-// Create an item prefetcher with IterableMapper
-// Use `npm i it-batch`'s `batch` function to batch the source iterable
-// into batches of a specific size, such as 50, if making batch requests
-// to a remote service.
-const prefetcher = new IterableMapper(
-  // Batch example:
-  //   batch(iterator, 50),
-  iterator,
-  // Batch example:
-  //   async (values: number[]): Promise<number> => {
-  async (value: number): Promise<number> => {
-    callCount++;
-    total += value;
+`IterableQueueMapperSimple` is similar to `IterableQueueMapper` but instead exposing the results as an iterable it discards the results as soon as they are ready and exposes any errors through the `errors` property.
 
-    // Simulate fetching an async item with varied delays
-    await sleep(10 * (callCount % 6));
+See [examples/iterable-queue-mapper-simple.ts](./examples/iterable-queue-mapper-simple.ts) for an example.
 
-    return total;
-  },
-  { concurrency: 2, maxUnread: 10 },
-);
-
-let lastTotal = 0;
-let loopCount = 0;
-
-// Loop through the prefetched items or batches
-// Will pause and wait for prefetch to complete if none available
-// Will immediately start processing if prefetched item or batch is already available
-// If the `maxUnread` count was hit then no prefetches will be in progress until an item
-// is returned from the iterable here.  Once an item is returned a mapper
-// will be started; this will repeat until `concurrency` mappers are running again.
-for await (const item of prefetcher) {
-  loopCount++;
-  if (item > lastTotal) {
-    lastTotal = item;
-  }
-}
-```
+Run the example with `npm run example:iterable-queue-mapper-simple`
 
 # Contributing - Setting up Build Environment
 

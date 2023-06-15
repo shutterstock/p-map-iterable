@@ -47,9 +47,9 @@ See [p-map](https://github.com/sindresorhus/p-map) docs for a good start in unde
 
 The key difference between `IterableMapper` and `pMap` are that `IterableMapper` does not return when the entire mapping is done, rather it exposes an iterable that the caller loops through. This enables results to be processed while the mapping is still happening, while optionally allowing for back pressure to slow or stop the mapping if the caller is not consuming items fast enough. Common use cases include `prefetching` items from a remote service - the next set of requests are dispatched asyncronously while the current responses are processed and the prefetch requests will pause when the unread queue fills up.
 
-See [examples/iterable-queue.ts](./examples/iterable-queue.ts) for an example.
+See [examples/iterable-mapper.ts](./examples/iterable-mapper.ts) for an example.
 
-Run the example with `npm run example:iterable-queue`
+Run the example with `npm run example:iterable-mapper`
 
 # `IterableQueueMapper`
 

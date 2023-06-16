@@ -50,8 +50,8 @@ describe('IterableQueueMapperSimple', () => {
     expect(backgroundWriter.isIdle).toBe(true);
 
     expect(backgroundWriter.errors.length).toBe(5);
-    expect(backgroundWriter.errors[0]).toBeInstanceOf(Error);
-    expect((backgroundWriter.errors[0] as Error).message).toBe('stop this now');
+    expect(backgroundWriter.errors[0].error).toBeInstanceOf(Error);
+    expect((backgroundWriter.errors[0].error as Error).message).toBe('stop this now');
 
     // Show that double onIdle() does not hang or cause an error
     await backgroundWriter.onIdle();

@@ -72,8 +72,10 @@ async function main() {
   // Check for errors
   if (prefetcher.errors.length > 0) {
     console.error('Errors:');
-    prefetcher.errors.forEach((error) =>
-      console.error((error as Error).message ? (error as Error).message : error),
+    prefetcher.errors.forEach(({ error, item }) =>
+      console.error(
+        `${item} had error: ${(error as Error).message ? (error as Error).message : error}`,
+      ),
     );
   }
 

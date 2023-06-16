@@ -32,20 +32,29 @@ export interface IterableQueueMapperOptions {
 }
 
 /**
- * Iterates over a source iterable with specified concurrency,
- * calling the `mapper` on each iterated item, and storing the
+ * Accepts queue items via `enqueue` and calls the `mapper` on them
+ * with specified concurrency, storing the
  * `mapper` result in a queue of specified max size, before
- * being iterated / read by the caller.
+ * being iterated / read by the caller.  The `enqueue` method will block if
+ * the queue is full, until an item is read.
  *
  * @remarks
  *
- * Essentially - This allows performing a concurrent mapping with
- * back pressure (won't iterate all source items if the consumer is
- * not reading).
+ * This allows performing a concurrent mapping with
+ * back pressure for items added after queue creation
+ * via a method call.
  *
- * Typical use case is for a `prefetcher` that ensures that items
- * are always ready for the consumer but that large numbers of items
- * are not processed before the consumer is ready for them.
+ * Because items are added via a method call it is possible to
+ * chain an `IterableMapper` that prefetches files and processes them,
+ * with an `IterableQueueMapper` that processes the results of the
+ * `mapper` function of the `IterableMapper`.
+ *
+ * Typical use case is for a `background uploader` that prevents
+ * the producer from racing ahead of the upload process, consuming
+ * too much memory or disk space. As items are ready for upload
+ * they are added to the queue with the `enqueue` method, which is
+ * `await`ed by the caller.  If the queue has room then `enqueue`
+ * will return immediately, otherwise it will block until there is room.
  *
  * @category Enqueue Input
  */
@@ -57,7 +66,21 @@ export class IterableQueueMapper<Element, NewElement> implements AsyncIterable<N
   /**
    * Create a new `IterableQueueMapper`
    *
-   * @param mapper Function which is called for every item in `input`. Expected to return a `Promise` or value.
+   * @param mapper Function which is called for every item in `input`.
+   *    Expected to return a `Promise` or value.
+   *
+   *    The `mapper` *should* handle all errors and not allow an error to be thrown
+   *    out of the `mapper` function as this enables the best handling of errors
+   *    closest to the time that they occur.
+   *
+   *    If the `mapper` function does allow an error to be thrown then the
+   *   `stopOnMapperError` option controls the behavior:
+   *      - `stopOnMapperError`: `true` - will throw the error
+   *        out of `next` or the `AsyncIterator` returned from `[Symbol.asyncIterator]`
+   *        and stop processing.
+   *     - `stopOnMapperError`: `false` - will continue processing
+   *        and accumulate the errors to be thrown from `next` or the `AsyncIterator`
+   *        returned from `[Symbol.asyncIterator]` when all items have been processed.
    * @param options IterableQueueMapper options
    */
   constructor(mapper: Mapper<Element, NewElement>, options: IterableQueueMapperOptions = {}) {

@@ -2,11 +2,22 @@ import { Mapper } from './iterable-mapper';
 import { IterableQueueMapper } from './iterable-queue-mapper';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Errors = (string | { [key: string]: any } | Error)[];
+type Errors<T> = { item: T; error: string | { [key: string]: any } | Error }[];
 
 const NoResult = Symbol('noresult');
 
 /**
+ * Accepts queue items via `enqueue` and calls the `mapper` on them
+ * with specified concurrency, storing the
+ * `mapper` result in a queue of specified max size, before
+ * being iterated / read by the caller.  The `enqueue` method will block if
+ * the queue is full, until an item is read.
+ *
+ * @remarks
+ *
+ * Note: the name is somewhat of a misnomer as this wraps `IterableQueueMapper`
+ * but is not itself an `Iterable`.
+ *
  * Accepts items for mapping in the background, discards the results,
  * but accumulates exceptions in the `errors` property.
  *
@@ -17,7 +28,7 @@ const NoResult = Symbol('noresult');
  */
 export class IterableQueueMapperSimple<Element> {
   private readonly _writer: IterableQueueMapper<Element, typeof NoResult>;
-  private readonly _errors: Errors = [];
+  private readonly _errors: Errors<Element> = [];
   private readonly _done: Promise<void>;
   private readonly _mapper: Mapper<Element, void>;
   private _isIdle = false;
@@ -25,7 +36,16 @@ export class IterableQueueMapperSimple<Element> {
   /**
    * Create a new `IterableQueueMapperSimple`
    *
-   * @param mapper Function which is called for every item in `input`. Expected to return a `Promise` or value.
+   * @param mapper Function which is called for every item in `input`.
+   *    Expected to return a `Promise` or value.
+   *
+   *    The `mapper` *should* handle all errors and not allow an error to be thrown
+   *    out of the `mapper` function as this enables the best handling of errors
+   *    closest to the time that they occur.
+   *
+   *    If the `mapper` function does allow an error to be thrown then the
+   *    errors will be accumulated in the `errors` property.
+   * @param options IterableQueueMapperSimple options
    */
   constructor(
     mapper: Mapper<Element, void>,
@@ -62,15 +82,24 @@ export class IterableQueueMapperSimple<Element> {
       await this._mapper(item, index);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
-      this._errors.push(error);
+      this._errors.push({ item, error });
     }
     return NoResult;
   }
 
   /**
    * Accumulated errors from background `mappers`s
+   *
+   * @remarks
+   *
+   * Note that this property can be periodically checked
+   * during processing and errors can be `.pop()`'d off of the array
+   * and logged / handled as desired. Errors `.pop()`'d off of the array
+   * will no longer be available in the array on the next check.
+   *
+   * @returns Reference to the errors array
    */
-  public get errors(): Errors {
+  public get errors(): Errors<Element> {
     return this._errors;
   }
 

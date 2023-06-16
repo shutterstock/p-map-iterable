@@ -1,12 +1,13 @@
 {
   "name": "@shutterstock/p-map-iterable",
-  "version": "1.0.0",
+  "version": "0.0.0",
   "description": "Async iterable that maps an async iterable input with backpressure.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "publishConfig": {
     "access": "public"
   },
+  "homepage": "https://tech.shutterstock.com/p-map-iterable/",
   "keywords": [
     "p-map",
     "p-map-iterable",

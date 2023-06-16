@@ -4,11 +4,6 @@ on:
   release:
     types: [published]
 
-  # Temporary on initial PR
-  pull_request:
-    branches:
-      - main
-
   workflow_dispatch:
 
 jobs:

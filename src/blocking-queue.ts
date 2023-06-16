@@ -1,6 +1,6 @@
 import { Queue } from './queue';
 
-interface BlockingQueueOptions {
+export interface BlockingQueueOptions {
   /**
    * Number of pending unread items.
    *
@@ -16,6 +16,14 @@ interface BlockingQueueOptions {
  */
 type WaiterResolverFunc = (value: unknown) => void;
 
+/**
+ * `enqueue` blocks when the queue is full, until an item is read with `dequeue`, or done
+ * `dequeue` blocks when the queue is empty, until an item is added with `enqueue`, or done
+ * `done` must be called when no more items will be added
+ * `dequeue` returns `undefined` there are no more items and processing is complete
+ *
+ * @category Low-Level
+ */
 export class BlockingQueue<Element> {
   private _options: Required<BlockingQueueOptions>;
 
@@ -41,13 +49,12 @@ export class BlockingQueue<Element> {
   private _doneAdding = false;
 
   /**
-   * - Maintains a maximum queue depth
-   * - Blocks `enqueue` when the queue is full, until an item is read with `dequeue`, or done
-   * - Blocks `dequeue` when the queue is empty, until an item is added with `enqueue`, or done
-   * - `done` must be called when no more items will be added
-   * - When `dequeue` returns `undefined` there are no more items and processing is complete
+   * Create a new `BlockingQueue`
+   *
+   * @param options BlockingQueue options
    */
-  constructor({ maxUnread = 8 }: BlockingQueueOptions = {}) {
+  constructor(options: BlockingQueueOptions = {}) {
+    const { maxUnread = 8 } = options;
     this._options = { maxUnread };
 
     // Avoid undefined errors on options

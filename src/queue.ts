@@ -2,6 +2,11 @@
 // 2021-08-27 - Based on simple example here: https://www.telerik.com/blogs/stack-queue-javascript
 //
 
+/**
+ * A simple queue implementation.
+ *
+ * @category Low-Level
+ */
 export class Queue<T> {
   private _queue: { [index: number]: T } = {};
   private _tail = 0;

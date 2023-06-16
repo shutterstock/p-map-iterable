@@ -6,6 +6,15 @@ type Errors = (string | { [key: string]: any } | Error)[];
 
 const NoResult = Symbol('noresult');
 
+/**
+ * Accepts items for mapping in the background, discards the results,
+ * but accumulates exceptions in the `errors` property.
+ *
+ * Allows up to `concurrency` mappers to be in progress before
+ * `enqueue` will block until a mapper completes.
+ *
+ * @category Enqueue Input
+ */
 export class IterableQueueMapperSimple<Element> {
   private readonly _writer: IterableQueueMapper<Element, typeof NoResult>;
   private readonly _errors: Errors = [];
@@ -14,15 +23,21 @@ export class IterableQueueMapperSimple<Element> {
   private _isIdle = false;
 
   /**
-   * Accepts items for mapping in the background.
+   * Create a new `IterableQueueMapperSimple`
    *
-   * Allows up to `concurrency` mappers to be in progress before
-   * `enqueue` will block until a mapper completes.
-   *
-   * @param opts.concurrency - Number of items to accept for mapping before requiring the caller to wait for one to complete. - Default 4
+   * @param mapper Function which is called for every item in `input`. Expected to return a `Promise` or value.
    */
-  constructor(mapper: Mapper<Element, void>, opts: { concurrency?: number } = {}) {
-    const { concurrency = 4 } = opts;
+  constructor(
+    mapper: Mapper<Element, void>,
+    options: {
+      /**
+       * Number of items to accept for mapping before requiring the caller to wait for one to complete.
+       * @default 4
+       */
+      concurrency?: number;
+    } = {},
+  ) {
+    const { concurrency = 4 } = options;
 
     this._mapper = mapper;
     this.worker = this.worker.bind(this);
@@ -65,7 +80,7 @@ export class IterableQueueMapperSimple<Element> {
    * This provides concurrency background writes with back pressure to prevent
    * the caller from getting too far ahead.
    *
-   * MUST await `onIdle` for background `mappers`'s to finish
+   * MUST await `onIdle` for background `mappers`s to finish
    * @param item
    */
   public async enqueue(item: Element): Promise<void> {
@@ -74,7 +89,7 @@ export class IterableQueueMapperSimple<Element> {
   }
 
   /**
-   * Wait for all background writes to finish.
+   * Wait for all background `mapper`s to finish.
    * MUST be called before exit to ensure no lost writes.
    */
   public async onIdle(): Promise<void> {
@@ -89,6 +104,8 @@ export class IterableQueueMapperSimple<Element> {
   }
 
   /**
+   * Indicates if all background `mapper`s have finished.
+   *
    * @returns true if .onIdle() has been called and finished all background writes
    */
   public get isIdle(): boolean {

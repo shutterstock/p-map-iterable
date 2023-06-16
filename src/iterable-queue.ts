@@ -1,22 +1,19 @@
-import { BlockingQueue } from './blocking-queue';
+import { BlockingQueue, BlockingQueueOptions } from './blocking-queue';
 
-interface IterableQueueOptions {
-  /**
-   * Number of pending unread iterable items.
-   *
-   * Must be an integer from 0 and up or `Infinity`.
-   *
-   * @default 8
-   */
-  readonly maxUnread?: number;
-}
+export type IterableQueueOptions = BlockingQueueOptions;
 
+/**
+ * Exposes an `AsyncIterable` interface for the `BlockingQueue`.
+ *
+ * @category Low-Level
+ */
 export class IterableQueue<Element>
   extends BlockingQueue<Element>
   implements AsyncIterable<Element>
 {
   /**
-   * Exposes an `AsyncIterable` interface for the `BlockingQueue`.
+   * Create a new `IterableQueue`
+   * @param options IterableQueue options
    */
   constructor(options: IterableQueueOptions = {}) {
     super(options);
@@ -29,6 +26,7 @@ export class IterableQueue<Element>
   /**
    * Used by the iterator returned from [Symbol.asyncIterator]
    * Called every time an item is needed
+   *
    * @returns Iterator result
    */
   public async next(): Promise<IteratorResult<Element>> {

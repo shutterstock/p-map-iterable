@@ -23,6 +23,8 @@ These classes will typically be helpful in batch or queue consumers, not as much
 
 # Installation
 
+The package is available on npm as [@shutterstock/p-map-iterable](https://www.npmjs.com/package/@shutterstock/p-map-iterable)
+
 `npm i @shutterstock/p-map-iterable`
 
 # `p-map-iterable` vs `p-map` vs `p-queue`

@@ -6,3 +6,4 @@ dist/
 .nyc_output/
 coverage/
 .DS_Store
+docs/

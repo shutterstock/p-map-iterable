@@ -19,6 +19,7 @@
   ],
   "scripts": {
     "build": "tsc --build tsconfig.json && echo 'examples/' > dist/.npmignore",
+    "build:docs": "typedoc src/index.ts",
     "example:iterable-mapper": "ts-node -r tsconfig-paths/register examples/iterable-mapper.ts",
     "example:iterable-queue-mapper": "ts-node -r tsconfig-paths/register examples/iterable-queue-mapper.ts",
     "example:iterable-queue-mapper-simple": "ts-node -r tsconfig-paths/register examples/iterable-queue-mapper-simple.ts",
@@ -54,6 +55,7 @@
     "ts-jest": "29.1.0",
     "ts-node": "10.9.1",
     "tsconfig-paths": "4.2.0",
+    "typedoc": "^0.24.8",
     "typescript": "5.1.3"
   }
 }

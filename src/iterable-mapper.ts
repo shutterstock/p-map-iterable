@@ -4,39 +4,44 @@
 import AggregateError from 'aggregate-error';
 import { IterableQueue } from './iterable-queue';
 
-interface IterableMapperOptions {
+/**
+ * Options for IterableMapper
+ */
+export interface IterableMapperOptions {
   /**
-		Number of concurrently pending promises returned by `mapper`.
-
-		Must be an integer from 1 and up or `Infinity`, must be <= `maxUnread`.
-
-		@default 4
-		*/
+   * Number of concurrently pending promises returned by `mapper`.
+   *
+   * Must be an integer from 1 and up or `Infinity`, must be <= `maxUnread`.
+   *
+   * @default 4
+   */
   readonly concurrency?: number;
 
   /**
-		Number of pending unread iterable items.
-
-		Must be an integer from 1 and up or `Infinity`, must be >= `concurrency`.
-
-		@default 8
-		*/
+   * Number of pending unread iterable items.
+   *
+   * Must be an integer from 1 and up or `Infinity`, must be >= `concurrency`.
+   *
+   * @default 8
+   */
   readonly maxUnread?: number;
 
   /**
-		When set to `false`, instead of stopping when a promise rejects, it will wait for all the promises to settle and then reject with an [aggregated error](https://github.com/sindresorhus/aggregate-error) containing all the errors from the rejected promises.
-
-		@default true
-		*/
+   * When set to `false`, instead of stopping when a promise rejects, it will wait for all the promises to settle and then reject with an [aggregated error](https://github.com/sindresorhus/aggregate-error) containing all the errors from the rejected promises.
+   *
+   * @default true
+   */
   readonly stopOnMapperError?: boolean;
 }
 
 /**
-	Function which is called for every item in `input`. Expected to return a `Promise` or value.
-
-	@param element - Iterated element.
-	@param index - Index of the element in the source array.
-	*/
+ * Function which is called for every item in `input`. Expected to return a `Promise` or value.
+ *
+ * @template Element - Source element type
+ * @template NewElement - Element type returned by the mapper
+ * @param element - Iterated element
+ * @param index - Index of the element in the source array
+ */
 export type Mapper<Element = unknown, NewElement = unknown> = (
   element: Element,
   index: number,
@@ -50,6 +55,24 @@ type NewElementOrError<NewElement = unknown> = {
   error?: unknown;
 };
 
+/**
+ * Iterates over a source iterable with specified concurrency,
+ * calling the `mapper` on each iterated item, and storing the
+ * `mapper` result in a queue of specified max size, before
+ * being iterated / read by the caller.
+ *
+ * @remarks
+ *
+ * Essentially - This allows performing a concurrent mapping with
+ * back pressure (won't iterate all source items if the consumer is
+ * not reading).
+ *
+ * Typical use case is for a `prefetcher` that ensures that items
+ * are always ready for the consumer but that large numbers of items
+ * are not processed before the consumer is ready for them.
+ *
+ * @category Iterable Input
+ */
 export class IterableMapper<Element, NewElement> implements AsyncIterable<NewElement> {
   private _mapper: Mapper<Element, NewElement>;
   private _options: Required<IterableMapperOptions>;
@@ -67,31 +90,19 @@ export class IterableMapper<Element, NewElement> implements AsyncIterable<NewEle
   private _initialRunnersCreated = false;
 
   /**
-   * Iterates over a source iterable with specified concurrency,
-   * calling the `mapper` on each iterated item, and storing the
-   * `mapper` result in a queue of specified max size, before
-   * being iterated / read by the caller.
+   * Create a new `IterableMapper`
    *
-   * Essentially - This allows performing a concurrent mapping with
-   * back pressure (won't iterate all source items if the consumer is
-   * not reading).
-   *
-   * Typical use case is for a `prefetcher` that ensures that items
-   * are always ready for the consumer but that large numbers of items
-   * are not processed before the consumer is ready for them.
-   *
-   * @param input - Iterated over concurrently in the `mapper` function.
-   * @param mapper - Function which is called for every item in `input`. Expected to return a `Promise` or value.
-   * @param options - { concurrency: max mappers to run in parallel,
-   *                    maxUnread: max unread mapped results - this waits for results to be read,
-   *                    stopOnError: return if a mapper throws - note that any other running mappers will then not be able to return results
-   *                  }
+   * @param input Iterated over concurrently in the `mapper` function.
+   * @param mapper Function which is called for every item in `input`. Expected to return a `Promise` or value.
+   * @param options IterableMapper options
    */
   constructor(
-    iterable: AsyncIterable<Element> | Iterable<Element>,
+    input: AsyncIterable<Element> | Iterable<Element>,
     mapper: Mapper<Element, NewElement>,
-    { concurrency = 4, stopOnMapperError = true, maxUnread = 8 }: IterableMapperOptions = {},
+    options: IterableMapperOptions = {},
   ) {
+    const { concurrency = 4, stopOnMapperError = true, maxUnread = 8 } = options;
+
     this._mapper = mapper;
     this._options = { concurrency, stopOnMapperError, maxUnread };
 
@@ -144,12 +155,12 @@ export class IterableMapper<Element, NewElement> implements AsyncIterable<NewEle
     this._unreadQueue = new IterableQueue({ maxUnread });
 
     // Setup the source iterator
-    if ((iterable as AsyncIterable<Element>)[Symbol.asyncIterator] !== undefined) {
+    if ((input as AsyncIterable<Element>)[Symbol.asyncIterator] !== undefined) {
       // We've got an async iterable
-      this._iterator = (iterable as AsyncIterable<Element>)[Symbol.asyncIterator]();
+      this._iterator = (input as AsyncIterable<Element>)[Symbol.asyncIterator]();
       this._asyncIterator = true;
     } else {
-      this._iterator = (iterable as Iterable<Element>)[Symbol.iterator]();
+      this._iterator = (input as Iterable<Element>)[Symbol.iterator]();
     }
 
     // Create the initial concurrent runners in a detached (non-awaited)
@@ -183,6 +194,7 @@ export class IterableMapper<Element, NewElement> implements AsyncIterable<NewEle
   /**
    * Used by the iterator returned from [Symbol.asyncIterator]
    * Called every time an item is needed
+   *
    * @returns Iterator result
    */
   public async next(): Promise<IteratorResult<NewElement>> {
@@ -283,7 +295,8 @@ export class IterableMapper<Element, NewElement> implements AsyncIterable<NewEle
 
   /**
    * Throw an exception if the wrapped NewElement is an Error
-   * @returns
+   *
+   * @returns Element if no error
    */
   private throwIfError(item: NewElementOrError<NewElement>): NewElement {
     if (item.error !== undefined) {
@@ -297,6 +310,8 @@ export class IterableMapper<Element, NewElement> implements AsyncIterable<NewEle
   /**
    * Get the next item from the source iterable.
    *
+   * @remarks
+   *
    * This is called up to `concurrency` times in parallel.
    *
    * If the read queue is not full, and there are source items to read,
@@ -306,7 +321,6 @@ export class IterableMapper<Element, NewElement> implements AsyncIterable<NewEle
    *
    * If the read queue + runners = max read queue length then the runner
    * will exit and will be restarted when an item is read from the queue.
-   * @returns
    */
   private async sourceNext() {
     if (this._isRejected) {

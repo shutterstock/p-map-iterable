@@ -16,12 +16,20 @@
 <li><a href="IterableQueueMapperSimple.html">IterableQueueMapperSimple</a></li></ul>
 <h1>Class IterableQueueMapperSimple&lt;Element&gt;</h1></div>
 <section class="tsd-panel tsd-comment">
-<div class="tsd-comment tsd-typography"><p>Accepts items for mapping in the background, discards the results,
+<div class="tsd-comment tsd-typography"><p>Accepts queue items via <code>enqueue</code> and calls the <code>mapper</code> on them
+with specified concurrency, storing the
+<code>mapper</code> result in a queue of specified max size, before
+being iterated / read by the caller.  The <code>enqueue</code> method will block if
+the queue is full, until an item is read.</p>
+</div>
+<div class="tsd-comment tsd-typography">
+<h4>Remarks</h4><p>Note: the name is somewhat of a misnomer as this wraps <code>IterableQueueMapper</code>
+but is not itself an <code>Iterable</code>.</p>
+<p>Accepts items for mapping in the background, discards the results,
 but accumulates exceptions in the <code>errors</code> property.</p>
 <p>Allows up to <code>concurrency</code> mappers to be in progress before
 <code>enqueue</code> will block until a mapper completes.</p>
-</div>
-<div class="tsd-comment tsd-typography"></div></section> 
+</div></section> 
 <section class="tsd-panel">
 <h4>Type Parameters</h4>
 <ul class="tsd-type-parameter-list">
@@ -32,7 +40,7 @@ but accumulates exceptions in the <code>errors</code> property.</p>
 <ul class="tsd-hierarchy">
 <li><span class="target">IterableQueueMapperSimple</span></li></ul></section><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/shutterstock/p-map-iterable/blob/a442cab/src/iterable-queue-mapper-simple.ts#L18">iterable-queue-mapper-simple.ts:18</a></li></ul></aside>
+<li>Defined in <a href="https://github.com/shutterstock/p-map-iterable/blob/7b3c80f/src/iterable-queue-mapper-simple.ts#L29">iterable-queue-mapper-simple.ts:29</a></li></ul></aside>
 <section class="tsd-panel-group tsd-index-group">
 <section class="tsd-panel tsd-index-panel">
 <details class="tsd-index-content tsd-index-accordion" open><summary class="tsd-accordion-summary tsd-index-summary">
@@ -81,64 +89,79 @@ but accumulates exceptions in the <code>errors</code> property.</p>
 <ul class="tsd-parameter-list">
 <li>
 <h5><span class="tsd-kind-parameter">mapper</span>: <a href="../types/Mapper.html" class="tsd-signature-type tsd-kind-type-alias">Mapper</a><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type tsd-kind-type-parameter">Element</span><span class="tsd-signature-symbol">, </span><span class="tsd-signature-type">void</span><span class="tsd-signature-symbol">&gt;</span></h5>
-<div class="tsd-comment tsd-typography"><p>Function which is called for every item in <code>input</code>. Expected to return a <code>Promise</code> or value.</p>
+<div class="tsd-comment tsd-typography"><p>Function which is called for every item in <code>input</code>.
+   Expected to return a <code>Promise</code> or value.</p>
+<p>   The <code>mapper</code> <em>should</em> handle all errors and not allow an error to be thrown
+   out of the <code>mapper</code> function as this enables the best handling of errors
+   closest to the time that they occur.</p>
+<p>   If the <code>mapper</code> function does allow an error to be thrown then the
+   errors will be accumulated in the <code>errors</code> property.</p>
 </div>
 <div class="tsd-comment tsd-typography"></div></li>
 <li>
 <h5><span class="tsd-kind-parameter">options</span>: <span class="tsd-signature-symbol">{ </span><br/><span>    </span><span class="tsd-kind-property">concurrency</span><span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">; </span><br/><span class="tsd-signature-symbol">}</span><span class="tsd-signature-symbol"> = {}</span></h5>
+<div class="tsd-comment tsd-typography"><p>IterableQueueMapperSimple options</p>
+</div>
+<div class="tsd-comment tsd-typography"></div>
 <ul class="tsd-parameters">
 <li class="tsd-parameter">
 <h5><code class="tsd-tag ts-flagOptional">Optional</code> <span class="tsd-kind-property">concurrency</span><span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type">number</span></h5>
 <div class="tsd-comment tsd-typography"><p>Number of items to accept for mapping before requiring the caller to wait for one to complete.</p>
 </div>
 <div class="tsd-comment tsd-typography">
-<h4>Default</h4><pre><code class="language-ts"><span class="hl-0">4</span>
+<h4>Default</h4><pre><code class="language-ts"><span class="hl-4">4</span>
 </code><button>Copy</button></pre>
 </div></li></ul></li></ul></div>
 <h4 class="tsd-returns-title">Returns <a href="IterableQueueMapperSimple.html" class="tsd-signature-type tsd-kind-class">IterableQueueMapperSimple</a><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type tsd-kind-type-parameter">Element</span><span class="tsd-signature-symbol">&gt;</span></h4>
 <div class="tsd-comment tsd-typography"></div><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/shutterstock/p-map-iterable/blob/a442cab/src/iterable-queue-mapper-simple.ts#L30">iterable-queue-mapper-simple.ts:30</a></li></ul></aside></li></ul></section></section>
+<li>Defined in <a href="https://github.com/shutterstock/p-map-iterable/blob/7b3c80f/src/iterable-queue-mapper-simple.ts#L50">iterable-queue-mapper-simple.ts:50</a></li></ul></aside></li></ul></section></section>
 <section class="tsd-panel-group tsd-member-group">
 <h2>Properties</h2>
 <section class="tsd-panel tsd-member tsd-is-private"><a id="_done" class="tsd-anchor"></a>
 <h3 class="tsd-anchor-link"><code class="tsd-tag ts-flagPrivate">Private</code> <code class="tsd-tag ts-flagReadonly">Readonly</code> <span>_done</span><a href="#_done" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">_done</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type ">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">void</span><span class="tsd-signature-symbol">&gt;</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/shutterstock/p-map-iterable/blob/a442cab/src/iterable-queue-mapper-simple.ts#L21">iterable-queue-mapper-simple.ts:21</a></li></ul></aside></section>
+<li>Defined in <a href="https://github.com/shutterstock/p-map-iterable/blob/7b3c80f/src/iterable-queue-mapper-simple.ts#L32">iterable-queue-mapper-simple.ts:32</a></li></ul></aside></section>
 <section class="tsd-panel tsd-member tsd-is-private"><a id="_errors" class="tsd-anchor"></a>
 <h3 class="tsd-anchor-link"><code class="tsd-tag ts-flagPrivate">Private</code> <code class="tsd-tag ts-flagReadonly">Readonly</code> <span>_errors</span><a href="#_errors" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></h3>
-<div class="tsd-signature"><span class="tsd-kind-property">_errors</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type ">Errors</span><span class="tsd-signature-symbol"> = []</span></div><aside class="tsd-sources">
+<div class="tsd-signature"><span class="tsd-kind-property">_errors</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type ">Errors</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type tsd-kind-type-parameter">Element</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol"> = []</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/shutterstock/p-map-iterable/blob/a442cab/src/iterable-queue-mapper-simple.ts#L20">iterable-queue-mapper-simple.ts:20</a></li></ul></aside></section>
+<li>Defined in <a href="https://github.com/shutterstock/p-map-iterable/blob/7b3c80f/src/iterable-queue-mapper-simple.ts#L31">iterable-queue-mapper-simple.ts:31</a></li></ul></aside></section>
 <section class="tsd-panel tsd-member tsd-is-private"><a id="_isIdle" class="tsd-anchor"></a>
 <h3 class="tsd-anchor-link"><code class="tsd-tag ts-flagPrivate">Private</code> <span>_is<wbr/>Idle</span><a href="#_isIdle" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">_is<wbr/>Idle</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol"> = false</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/shutterstock/p-map-iterable/blob/a442cab/src/iterable-queue-mapper-simple.ts#L23">iterable-queue-mapper-simple.ts:23</a></li></ul></aside></section>
+<li>Defined in <a href="https://github.com/shutterstock/p-map-iterable/blob/7b3c80f/src/iterable-queue-mapper-simple.ts#L34">iterable-queue-mapper-simple.ts:34</a></li></ul></aside></section>
 <section class="tsd-panel tsd-member tsd-is-private"><a id="_mapper" class="tsd-anchor"></a>
 <h3 class="tsd-anchor-link"><code class="tsd-tag ts-flagPrivate">Private</code> <code class="tsd-tag ts-flagReadonly">Readonly</code> <span>_mapper</span><a href="#_mapper" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">_mapper</span><span class="tsd-signature-symbol">:</span> <a href="../types/Mapper.html" class="tsd-signature-type tsd-kind-type-alias">Mapper</a><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type tsd-kind-type-parameter">Element</span><span class="tsd-signature-symbol">, </span><span class="tsd-signature-type">void</span><span class="tsd-signature-symbol">&gt;</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/shutterstock/p-map-iterable/blob/a442cab/src/iterable-queue-mapper-simple.ts#L22">iterable-queue-mapper-simple.ts:22</a></li></ul></aside></section>
+<li>Defined in <a href="https://github.com/shutterstock/p-map-iterable/blob/7b3c80f/src/iterable-queue-mapper-simple.ts#L33">iterable-queue-mapper-simple.ts:33</a></li></ul></aside></section>
 <section class="tsd-panel tsd-member tsd-is-private"><a id="_writer" class="tsd-anchor"></a>
 <h3 class="tsd-anchor-link"><code class="tsd-tag ts-flagPrivate">Private</code> <code class="tsd-tag ts-flagReadonly">Readonly</code> <span>_writer</span><a href="#_writer" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">_writer</span><span class="tsd-signature-symbol">:</span> <a href="IterableQueueMapper.html" class="tsd-signature-type tsd-kind-class">IterableQueueMapper</a><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type tsd-kind-type-parameter">Element</span><span class="tsd-signature-symbol">, </span><span class="tsd-signature-symbol">typeof </span><span class="tsd-signature-type ">NoResult</span><span class="tsd-signature-symbol">&gt;</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/shutterstock/p-map-iterable/blob/a442cab/src/iterable-queue-mapper-simple.ts#L19">iterable-queue-mapper-simple.ts:19</a></li></ul></aside></section></section>
+<li>Defined in <a href="https://github.com/shutterstock/p-map-iterable/blob/7b3c80f/src/iterable-queue-mapper-simple.ts#L30">iterable-queue-mapper-simple.ts:30</a></li></ul></aside></section></section>
 <section class="tsd-panel-group tsd-member-group">
 <h2>Accessors</h2>
 <section class="tsd-panel tsd-member"><a id="errors" class="tsd-anchor"></a>
 <h3 class="tsd-anchor-link"><span>errors</span><a href="#errors" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></h3>
 <ul class="tsd-signatures">
-<li class="tsd-signature" id="errors.errors-1"><span class="tsd-signature-symbol">get</span> errors<span class="tsd-signature-symbol">(</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type ">Errors</span></li>
+<li class="tsd-signature" id="errors.errors-1"><span class="tsd-signature-symbol">get</span> errors<span class="tsd-signature-symbol">(</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type ">Errors</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type tsd-kind-type-parameter">Element</span><span class="tsd-signature-symbol">&gt;</span></li>
 <li class="tsd-description">
 <div class="tsd-comment tsd-typography"><p>Accumulated errors from background <code>mappers</code>s</p>
 </div>
-<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type ">Errors</span></h4>
-<div class="tsd-comment tsd-typography"></div><aside class="tsd-sources">
+<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type ">Errors</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type tsd-kind-type-parameter">Element</span><span class="tsd-signature-symbol">&gt;</span></h4><p>Reference to the errors array</p>
+
+<div class="tsd-comment tsd-typography">
+<h4>Remarks</h4><p>Note that this property can be periodically checked
+during processing and errors can be <code>.pop()</code>&#39;d off of the array
+and logged / handled as desired. Errors <code>.pop()</code>&#39;d off of the array
+will no longer be available in the array on the next check.</p>
+</div><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/shutterstock/p-map-iterable/blob/a442cab/src/iterable-queue-mapper-simple.ts#L73">iterable-queue-mapper-simple.ts:73</a></li></ul></aside></li></ul></section>
+<li>Defined in <a href="https://github.com/shutterstock/p-map-iterable/blob/7b3c80f/src/iterable-queue-mapper-simple.ts#L102">iterable-queue-mapper-simple.ts:102</a></li></ul></aside></li></ul></section>
 <section class="tsd-panel tsd-member"><a id="isIdle" class="tsd-anchor"></a>
 <h3 class="tsd-anchor-link"><span>is<wbr/>Idle</span><a href="#isIdle" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></h3>
 <ul class="tsd-signatures">
@@ -150,7 +173,7 @@ but accumulates exceptions in the <code>errors</code> property.</p>
 
 <div class="tsd-comment tsd-typography"></div><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/shutterstock/p-map-iterable/blob/a442cab/src/iterable-queue-mapper-simple.ts#L111">iterable-queue-mapper-simple.ts:111</a></li></ul></aside></li></ul></section></section>
+<li>Defined in <a href="https://github.com/shutterstock/p-map-iterable/blob/7b3c80f/src/iterable-queue-mapper-simple.ts#L140">iterable-queue-mapper-simple.ts:140</a></li></ul></aside></li></ul></section></section>
 <section class="tsd-panel-group tsd-member-group">
 <h2>Methods</h2>
 <section class="tsd-panel tsd-member tsd-is-private"><a id="discardResults" class="tsd-anchor"></a>
@@ -160,7 +183,7 @@ but accumulates exceptions in the <code>errors</code> property.</p>
 <li class="tsd-description">
 <h4 class="tsd-returns-title">Returns <span class="tsd-signature-type ">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">void</span><span class="tsd-signature-symbol">&gt;</span></h4><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/shutterstock/p-map-iterable/blob/a442cab/src/iterable-queue-mapper-simple.ts#L50">iterable-queue-mapper-simple.ts:50</a></li></ul></aside></li></ul></section>
+<li>Defined in <a href="https://github.com/shutterstock/p-map-iterable/blob/7b3c80f/src/iterable-queue-mapper-simple.ts#L70">iterable-queue-mapper-simple.ts:70</a></li></ul></aside></li></ul></section>
 <section class="tsd-panel tsd-member"><a id="enqueue" class="tsd-anchor"></a>
 <h3 class="tsd-anchor-link"><span>enqueue</span><a href="#enqueue" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></h3>
 <ul class="tsd-signatures">
@@ -181,7 +204,7 @@ the caller from getting too far ahead.</p>
 <h4 class="tsd-returns-title">Returns <span class="tsd-signature-type ">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">void</span><span class="tsd-signature-symbol">&gt;</span></h4>
 <div class="tsd-comment tsd-typography"></div><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/shutterstock/p-map-iterable/blob/a442cab/src/iterable-queue-mapper-simple.ts#L86">iterable-queue-mapper-simple.ts:86</a></li></ul></aside></li></ul></section>
+<li>Defined in <a href="https://github.com/shutterstock/p-map-iterable/blob/7b3c80f/src/iterable-queue-mapper-simple.ts#L115">iterable-queue-mapper-simple.ts:115</a></li></ul></aside></li></ul></section>
 <section class="tsd-panel tsd-member"><a id="onIdle" class="tsd-anchor"></a>
 <h3 class="tsd-anchor-link"><span>on<wbr/>Idle</span><a href="#onIdle" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></h3>
 <ul class="tsd-signatures">
@@ -193,7 +216,7 @@ MUST be called before exit to ensure no lost writes.</p>
 <h4 class="tsd-returns-title">Returns <span class="tsd-signature-type ">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">void</span><span class="tsd-signature-symbol">&gt;</span></h4>
 <div class="tsd-comment tsd-typography"></div><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/shutterstock/p-map-iterable/blob/a442cab/src/iterable-queue-mapper-simple.ts#L95">iterable-queue-mapper-simple.ts:95</a></li></ul></aside></li></ul></section>
+<li>Defined in <a href="https://github.com/shutterstock/p-map-iterable/blob/7b3c80f/src/iterable-queue-mapper-simple.ts#L124">iterable-queue-mapper-simple.ts:124</a></li></ul></aside></li></ul></section>
 <section class="tsd-panel tsd-member tsd-is-private"><a id="worker" class="tsd-anchor"></a>
 <h3 class="tsd-anchor-link"><code class="tsd-tag ts-flagPrivate">Private</code> <span>worker</span><a href="#worker" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></h3>
 <ul class="tsd-signatures tsd-is-private">
@@ -208,7 +231,7 @@ MUST be called before exit to ensure no lost writes.</p>
 <h5><span class="tsd-kind-parameter">index</span>: <span class="tsd-signature-type">number</span></h5></li></ul></div>
 <h4 class="tsd-returns-title">Returns <span class="tsd-signature-type ">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-symbol">typeof </span><span class="tsd-signature-type ">NoResult</span><span class="tsd-signature-symbol">&gt;</span></h4><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/shutterstock/p-map-iterable/blob/a442cab/src/iterable-queue-mapper-simple.ts#L60">iterable-queue-mapper-simple.ts:60</a></li></ul></aside></li></ul></section></section></div>
+<li>Defined in <a href="https://github.com/shutterstock/p-map-iterable/blob/7b3c80f/src/iterable-queue-mapper-simple.ts#L80">iterable-queue-mapper-simple.ts:80</a></li></ul></aside></li></ul></section></section></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">

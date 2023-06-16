@@ -1,4 +1,4 @@
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT) [![Build - CI](https://github.com/shutterstock/p-map-iterable/actions/workflows/ci.yml/badge.svg)](https://github.com/shutterstock/p-map-iterable/actions/workflows/ci.yml) [![Package and Publish](https://github.com/shutterstock/p-map-iterable/actions/workflows/publish.yml/badge.svg)](https://github.com/shutterstock/p-map-iterable/actions/workflows/publish.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT) [![API Docs](https://img.shields.io/badge/API%20Docs-View%20Here-blue)](https://tech.shutterstock.com/p-map-iterable/) [![Build - CI](https://github.com/shutterstock/p-map-iterable/actions/workflows/ci.yml/badge.svg)](https://github.com/shutterstock/p-map-iterable/actions/workflows/ci.yml) [![Package and Publish](https://github.com/shutterstock/p-map-iterable/actions/workflows/publish.yml/badge.svg)](https://github.com/shutterstock/p-map-iterable/actions/workflows/publish.yml) [![Publish Docs](https://github.com/shutterstock/p-map-iterable/actions/workflows/docs.yml/badge.svg)](https://github.com/shutterstock/p-map-iterable/actions/workflows/docs.yml)
 
 # Overview
 
@@ -21,11 +21,23 @@ These classes will typically be helpful in batch or queue consumers, not as much
 - We can also use `IterableQueueMapper.enqueue()` to write the files back to S3 without waiting for them to finish, unless we get more than, say, 3-4 files being uploaded at once, at which point we can pause until the current file is uploaded before we allow queuing another file for upload
 - In the rare case that 3-4 files are uploading, but not yet finished, we would block on `.enqueue()` and not consume much CPU while waiting for at least 1 upload to finish
 
-# Installation
+# Getting Started
+
+## Installation
 
 The package is available on npm as [@shutterstock/p-map-iterable](https://www.npmjs.com/package/@shutterstock/p-map-iterable)
 
 `npm i @shutterstock/p-map-iterable`
+
+## Importing
+
+```typescript
+import { IterableMapper, IterableQueueMapper, IterableQueueMapperSimple } from '@shutterstock/p-map-iterable';
+```
+
+## API Documentation
+
+After installing the package, you might want to look at our [API Documentation](https://tech.shutterstock.com/p-map-iterable/) to learn about all the features available.
 
 # `p-map-iterable` vs `p-map` vs `p-queue`
 
@@ -45,28 +57,28 @@ These diagrams illustrate the differences in operation betweeen `p-map`, `p-queu
 
 # Features
 
-- `IterableMapper`
+- [IterableMapper](https://tech.shutterstock.com/p-map-iterable/classes/IterableMapper.html)
   - Interface and concept based on: [p-map](https://github.com/sindresorhus/p-map)
   - Allows a sync or async iterable input
   - User supplied sync or async mapper function
   - Exposes an async iterable interface for consuming mapped items
   - Allows a maximum queue depth of mapped items - if the consumer stops consuming, the queue will fill up, at which point the mapper will stop being invoked until an item is consumed from the queue
   - This allows mapping with back pressure so that the mapper does not consume unlimited resources (e.g. memory, disk, network, event loop time) by racing ahead of the consumer
-- `IterableQueueMapper`
+- [IterableQueueMapper](https://tech.shutterstock.com/p-map-iterable/classes/IterableQueueMapper.html)
   - Wraps `IterableMapper`
   - Adds items to the queue via the `enqueue` method
-- `IterableQueueMapperSimple`
+- [IterableQueueMapperSimple](https://tech.shutterstock.com/p-map-iterable/classes/IterableQueueMapperSimple.html)
   - Wraps `IterableQueueMapper`
   - Discards results as they become available
   - Exposes any accumulated errors through the `errors` property instead of throwing an `AggregateError`
   - Not actually `Iterable` - May rename this before 1.0.0
 
 ## Lower Level Utilities
-- `IterableQueue`
+- [IterableQueue](https://tech.shutterstock.com/p-map-iterable/classes/IterableQueue.html)
   - Lower level utility class
   - Wraps `BlockingQueue`
   - Exposes an async iterable interface for consuming items in the queue
-- `BlockingQueue`
+- [BlockingQueue](https://tech.shutterstock.com/p-map-iterable/classes/BlockingQueue.html)
   - Lower level utility class
   - `dequeue` blocks until an item is available or until all items have been removed, then returns `undefined`
   - `enqueue` blocks if the queue is full

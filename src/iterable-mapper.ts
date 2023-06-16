@@ -63,7 +63,7 @@ type NewElementOrError<NewElement = unknown> = {
  *
  * @remarks
  *
- * Essentially - This allows performing a concurrent mapping with
+ * This allows performing a concurrent mapping with
  * back pressure (won't iterate all source items if the consumer is
  * not reading).
  *
@@ -93,7 +93,21 @@ export class IterableMapper<Element, NewElement> implements AsyncIterable<NewEle
    * Create a new `IterableMapper`
    *
    * @param input Iterated over concurrently in the `mapper` function.
-   * @param mapper Function which is called for every item in `input`. Expected to return a `Promise` or value.
+   * @param mapper Function which is called for every item in `input`.
+   *    Expected to return a `Promise` or value.
+   *
+   *    The `mapper` *should* handle all errors and not allow an error to be thrown
+   *    out of the `mapper` function as this enables the best handling of errors
+   *    closest to the time that they occur.
+   *
+   *    If the `mapper` function does allow an error to be thrown then the
+   *   `stopOnMapperError` option controls the behavior:
+   *      - `stopOnMapperError`: `true` - will throw the error
+   *        out of `next` or the `AsyncIterator` returned from `[Symbol.asyncIterator]`
+   *        and stop processing.
+   *     - `stopOnMapperError`: `false` - will continue processing
+   *        and accumulate the errors to be thrown from `next` or the `AsyncIterator`
+   *        returned from `[Symbol.asyncIterator]` when all items have been processed.
    * @param options IterableMapper options
    */
   constructor(

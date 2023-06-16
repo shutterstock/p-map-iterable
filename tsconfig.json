@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "rootDir": "src",
+    "rootDirs": ["src", "examples"],
     "outDir": "dist",
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
@@ -22,7 +22,13 @@
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
 
-    "forceConsistentCasingInFileNames": true /* Disallow inconsistently-cased references to the same file. */
+    "forceConsistentCasingInFileNames": true /* Disallow inconsistently-cased references to the same file. */,
+
+    // Allow referencing @shutterstock/p-map-iterable in examples
+    "baseUrl": ".",
+    "paths": {
+      "@shutterstock/p-map-iterable": ["src"]
+    }
   },
   "exclude": ["**/cdk.out", "**/dist", "**/node_modules"]
 }

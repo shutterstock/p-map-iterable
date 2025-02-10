@@ -15,9 +15,10 @@
     "sourceMap": true,
     "resolveJsonModule": true,
 
-    "importHelpers": true,
+    "importHelpers": false,
+    "noEmitHelpers": true,
     "composite": true,
-    "target": "es2016",
+    "target": "es2018",
     "module": "commonjs",
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,

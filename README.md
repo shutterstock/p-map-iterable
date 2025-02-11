@@ -32,7 +32,10 @@ The package is available on npm as [@shutterstock/p-map-iterable](https://www.np
 ## Importing
 
 ```typescript
-import { IterableMapper, IterableQueueMapper, IterableQueueMapperSimple } from '@shutterstock/p-map-iterable';
+import {
+  IterableMapper,
+  IterableQueueMapper,
+  IterableQueueMapperSimple } from '@shutterstock/p-map-iterable';
 ```
 
 ## API Documentation

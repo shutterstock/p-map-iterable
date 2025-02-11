@@ -1,7 +1,8 @@
 //
 // 2021-08-25 - Initially based on: https://raw.githubusercontent.com/sindresorhus/p-map/main/index.js
 //
-import AggregateError from 'aggregate-error';
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const AggregateError = require('aggregate-error');
 import { IterableQueue } from './iterable-queue';
 
 /**

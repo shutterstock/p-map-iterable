@@ -1,7 +1,7 @@
 {
   "name": "@shutterstock/p-map-iterable",
   "version": "0.0.0",
-  "description": "Async iterable that maps an async iterable input with backpressure.",
+  "description": "Set of classes that allow you to call mappers with controlled concurrency on iterables or on queues",
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
   "publishConfig": {
@@ -11,10 +11,15 @@
   "keywords": [
     "p-map",
     "p-map-iterable",
+    "blocking-queue",
+    "iterable-queue",
+    "mapping",
     "iterable",
+    "queue",
     "async",
     "promise",
-    "backpressure",
+    "back-pressure",
+    "flow-control",
     "AsyncIterable",
     "AsyncIterator"
   ],

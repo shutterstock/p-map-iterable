@@ -33,7 +33,9 @@ jobs:
         run: npm run test
 
       - name: NPM registry authentication
-        run: npm set //registry.npmjs.org/:_authToken ${{ secrets.NPMJSORG_PUBLISH_TOKEN }}
+        run: |
+          npm set //registry.npmjs.org/:_authToken ${{ secrets.NPMJSORG_PUBLISH_TOKEN }}
+          npm config set @shutterstock:registry https://registry.npmjs.org/
 
       - name: Publish with CLI to Code Artifact
         run: |

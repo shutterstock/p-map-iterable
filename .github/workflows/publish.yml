@@ -37,6 +37,6 @@ jobs:
           npm set //registry.npmjs.org/:_authToken ${{ secrets.NPMJSORG_PUBLISH_TOKEN }}
           npm config set @shutterstock:registry https://registry.npmjs.org/
 
-      - name: Publish with CLI to Code Artifact
+      - name: Publish with CLI to NPM
         run: |
           npm publish --access public --ignore-scripts

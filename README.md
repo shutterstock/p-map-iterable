@@ -8,18 +8,69 @@ A common use case for `@shutterstock/p-map-iterable` is as a "prefetcher" that w
 
 These classes will typically be helpful in batch or queue consumers, not as much in request/response services.
 
-# Example Usage Scenario
+# Example Usage Scenarios
 
-- AWS Lambda function for Kafka or Kinesis stream processing
-- Each invocation has a batch of, say, 100 records
-- Each record points to a file on S3 that needs to be parsed, processed, then written back to S3
-- The average file size is 50 MB, so these will take a few seconds to fetch and write
-- The Lambda function has 1,769 MB of RAM which gives it 1 vCPU, allowing the JS thread to run at roughly 100% speed of 1 core
-- If the code never waits to fetch or write files then the Lambda function will be able to use 100% of the paid-for CPU time
-- If there is no back pressure then reading 100 * 50 MB files would fill up the default Lambda temp disk space of 512 MB OR would consume 5 GB of memory, which would cause the Lambda function to fail
-- We can use `IterableMapper` to fetch up to 5 of the next files while the current file is being processed, then pause until the current file is processed and the next file is consumed
-- We can also use `IterableQueueMapper.enqueue()` to write the files back to S3 without waiting for them to finish, unless we get more than, say, 3-4 files being uploaded at once, at which point we can pause until the current file is uploaded before we allow queuing another file for upload
-- In the rare case that 3-4 files are uploading, but not yet finished, we would block on `.enqueue()` and not consume much CPU while waiting for at least 1 upload to finish
+Consider a typical processing loop without IterableMapper:
+
+```typescript
+const source = new SomeSource();
+const sourceIds = [1, 2,... 1000];
+const sink = new SomeSink();
+for (const sourceId of sourceIds) {
+  const item = await source.read(sourceId);     // takes 300 ms of I/O wait, no CPU
+  const outputItem = doSomeOperation(item);     // takes 20 ms of CPU
+  await sink.write(outputItem);                 // takes 500 ms of I/O wait, no CPU
+}
+```
+
+Each iteration takes 820ms total, but we waste time waiting for I/O. We could prefetch the next read (300ms) while processing (20ms) and writing (500ms), without changing the order of reads or writes.
+
+Using IterableMapper as a prefetcher:
+
+```typescript
+const source = new SomeSource();
+const sourceIds = [1, 2,... 1000];
+// Pre-reads up to 8 items serially and releases in sequential order
+const sourcePrefetcher = new IterableMapper(sourceIds,
+  async (sourceId) => source.read(sourceId),
+  { concurrency: 1 }
+);
+const sink = new SomeSink();
+for await (const item of sourcePrefetcher) {
+  const outputItem = doSomeOperation(item);     // takes 20 ms of CPU
+  await sink.write(outputItem);                 // takes 500 ms of I/O wait, no CPU
+}
+```
+
+This reduces iteration time to 520ms by overlapping reads with processing/writing.
+
+For maximum throughput, make the writes concurrent with IterableQueueMapper (to iterate results with backpressure when too many unread items) or IterableQueueMapperSimple (to handle errors at end without custom iteration or backpressure):
+
+```typescript
+const source = new SomeSource();
+const sourceIds = [1, 2,... 1000];
+const sourcePrefetcher = new IterableMapper(sourceIds,
+  async (sourceId) => source.read(sourceId),
+  { concurrency: 1 }
+);
+const sink = new SomeSink();
+const flusher = new IterableQueueMapperSimple(
+  async (outputItem) => sink.write(outputItem),
+  { concurrency: 10 }
+);
+for await (const item of sourcePrefetcher) {
+  const outputItem = doSomeOperation(item);     // takes 20 ms of CPU
+  await flusher.enqueue(outputItem);           // usually takes no time
+}
+// Wait for all writes to complete
+await flusher.onIdle();
+// Check for errors
+if (flusher.errors.length > 0) {
+  // ...
+}
+```
+
+This reduces iteration time to about 20ms by overlapping reads and writes with the CPU processing step. In this contrived (but common) example we would get a 41x improvement in throughput, removing 97.5% of the time to process each item and fully utilizing the CPU time available in the JS event loop.
 
 # Getting Started
 

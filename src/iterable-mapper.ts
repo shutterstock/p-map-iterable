@@ -127,7 +127,10 @@ type NewElementOrError<NewElement = unknown> = {
  *
  * This reduces iteration time to 520ms by overlapping reads with processing/writing.
  *
- * For maximum throughput, combine with IterableQueueMapperSimple for concurrent writes:
+ * For maximum throughput, make the writes concurrent with
+ * IterableQueueMapper (to iterate results with backpressure when too many unread items) or
+ * IterableQueueMapperSimple (to handle errors at end without custom iteration or backpressure):
+ *
  * ```typescript
  * const source = new SomeSource();
  * const sourceIds = [1, 2,... 1000];
@@ -152,7 +155,9 @@ type NewElementOrError<NewElement = unknown> = {
  * }
  * ```
  *
- * This reduces iteration time to about 20ms by overlapping reads and writes.
+ * This reduces iteration time to about 20ms by overlapping reads and writes with the CPU processing step.
+ * In this contrived (but common) example we would get a 41x improvement in throughput, removing 97.5% of
+ * the time to process each item and fully utilizing the CPU time available in the JS event loop.
  *
  * @category Iterable Input
  */

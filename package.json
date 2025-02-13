@@ -1,7 +1,7 @@
 {
   "name": "@shutterstock/p-map-iterable",
   "version": "0.0.0",
-  "description": "Set of classes that allow you to call mappers with controlled concurrency on iterables or on queues",
+  "description": "Set of classes used for async prefetching with backpressure (IterableMapper) and async flushing with backpressure (IterableQueueMapper, IterableQueueMapperSimple)",
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
   "publishConfig": {

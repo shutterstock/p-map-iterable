@@ -1,4 +1,4 @@
-import { Mapper } from './iterable-mapper';
+import { IterableMapperOptions, Mapper } from './iterable-mapper';
 import { IterableQueueMapper } from './iterable-queue-mapper';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -7,24 +7,49 @@ type Errors<T> = { item: T; error: string | { [key: string]: any } | Error }[];
 const NoResult = Symbol('noresult');
 
 /**
+ * Options for IterableQueueMapperSimple
+ */
+export type IterableQueueMapperSimpleOptions = Pick<IterableMapperOptions, 'concurrency'>;
+
+/**
  * Accepts queue items via `enqueue` and calls the `mapper` on them
- * with specified concurrency, storing the
- * `mapper` result in a queue of specified max size, before
- * being iterated / read by the caller.  The `enqueue` method will block if
- * the queue is full, until an item is read.
+ * with specified `concurrency`, discards the results, and accumulates
+ * exceptions in the `errors` property.  When empty, `await enqueue()`
+ * will return immediately, but when `concurrency` items are in progress,
+ * `await enqueue()` will block until a slot is available to accept the item.
  *
  * @remarks
+ *
+ * ### Typical Use Case
+ * - Pushing items to an async I/O destination
+ * - In the simple sequential (`concurrency: 1`) case, allows 1 item to be flushed async while caller prepares next item
+ * - Results of the flushed items are not needed in a subsequent step (if they are, use `IterableQueueMapper`)
+ *
+ * ### Error Handling
+ *   The mapper should ideally handle all errors internally to enable error handling
+ *   closest to where they occur. However, if errors do escape the mapper:
+ *   - Processing continues despite errors
+ *   - All errors are collected in the `errors` property
+ *   - Errors can be checked/handled during processing via the `errors` property
+ *
+ *   Key Differences from `IterableQueueMapper`:
+ *   - `maxUnread` defaults to equal `concurrency` (simplifying queue management)
+ *   - Results are automatically iterated and discarded (all work should happen in mapper)
+ *   - Errors are collected rather than thrown (available via errors property)
+ *
+ * ### Usage
+ * - Items are added to the queue via the `await enqueue()` method
+ * - Check `errors` property to see if any errors occurred, stop if desired
+ * - IMPORTANT: `await enqueue()` method will block until a slot is available, if queue is full
+ * - IMPORTANT: Always `await onIdle()` to ensure all items are processed
  *
  * Note: the name is somewhat of a misnomer as this wraps `IterableQueueMapper`
  * but is not itself an `Iterable`.
  *
- * Accepts items for mapping in the background, discards the results,
- * but accumulates exceptions in the `errors` property.
- *
- * Allows up to `concurrency` mappers to be in progress before
- * `enqueue` will block until a mapper completes.
- *
  * @category Enqueue Input
+ *
+ * @see {@link IterableQueueMapper} for related class with more configuration options
+ * @see {@link IterableMapper} for underlying mapper implementation and examples of combined usage
  */
 export class IterableQueueMapperSimple<Element> {
   private readonly _writer: IterableQueueMapper<Element, typeof NoResult>;
@@ -34,29 +59,17 @@ export class IterableQueueMapperSimple<Element> {
   private _isIdle = false;
 
   /**
-   * Create a new `IterableQueueMapperSimple`
+   * Create a new `IterableQueueMapperSimple`, which uses `IterableQueueMapper` underneath, but
+   * automatically iterates and discards results as they complete.
    *
-   * @param mapper Function which is called for every item in `input`.
-   *    Expected to return a `Promise` or value.
-   *
-   *    The `mapper` *should* handle all errors and not allow an error to be thrown
-   *    out of the `mapper` function as this enables the best handling of errors
-   *    closest to the time that they occur.
-   *
-   *    If the `mapper` function does allow an error to be thrown then the
-   *    errors will be accumulated in the `errors` property.
+   * @param mapper Function called for every enqueued item. Returns a `Promise` or value.
    * @param options IterableQueueMapperSimple options
+   *
+   * @see {@link IterableQueueMapperSimple} for full class documentation
+   * @see {@link IterableQueueMapper} for related class with more configuration options
+   * @see {@link IterableMapper} for underlying mapper implementation and examples of combined usage
    */
-  constructor(
-    mapper: Mapper<Element, void>,
-    options: {
-      /**
-       * Number of items to accept for mapping before requiring the caller to wait for one to complete.
-       * @default 4
-       */
-      concurrency?: number;
-    } = {},
-  ) {
+  constructor(mapper: Mapper<Element, void>, options: IterableQueueMapperSimpleOptions = {}) {
     const { concurrency = 4 } = options;
 
     this._mapper = mapper;
@@ -106,7 +119,7 @@ export class IterableQueueMapperSimple<Element> {
   /**
    * Accept a request for sending in the background if a concurrency slot is available.
    * Else, do not return until a concurrency slot is freed up.
-   * This provides concurrency background writes with back pressure to prevent
+   * This provides concurrency background writes with backpressure to prevent
    * the caller from getting too far ahead.
    *
    * MUST await `onIdle` for background `mappers`s to finish

@@ -82,18 +82,41 @@ type NewElementOrError<NewElement = unknown> = {
 };
 
 /**
- * Iterates over a source iterable with specified concurrency,
+ * Iterates over a source iterable / generator with specified `concurrency`,
  * calling the `mapper` on each iterated item, and storing the
- * `mapper` result in a queue of specified max size, before
+ * `mapper` result in a queue of `maxUnread` size, before
  * being iterated / read by the caller.
  *
  * @remarks
  *
- * Optimized for I/O-bound operations (e.g., fetching data, reading files) rather than
- * CPU-intensive tasks. The concurrent processing with backpressure ensures efficient
- * resource utilization without overwhelming memory or system resources.
+ * ### Typical Use Case
+ * - Prefetching items from an async I/O source
+ * - In the simple sequential (`concurrency: 1`) case, allows items to be prefetched async, preserving order, while caller processes an item
+ * - Can allow parallel prefetches for sources that allow for out of order reads (`concurrency:  2+`)
+ * - Prevents the producer from racing ahead of the consumer if `maxUnread` is reached
+ *
+ * ### Error Handling
+ *   The mapper should ideally handle all errors internally to enable error handling
+ *   closest to where they occur. However, if errors do escape the mapper:
+ *
+ *   When `stopOnMapperError` is true (default):
+ *   - First error immediately stops processing
+ *   - Error is thrown from the `AsyncIterator`'s next() call
+ *
+ *   When `stopOnMapperError` is false:
+ *   - Processing continues despite errors
+ *   - All errors are collected and thrown together
+ *   - Errors are thrown as `AggregateError` after all items complete
+ *
+ * ### Usage
+ * - Items are exposed to the `mapper` via an iterator or async iterator (this includes generator and async generator functions)
+ * - IMPORTANT: `mapper` method not be invoked when `maxUnread` is reached, until items are consumed
+ * - The iterable will set `done` when the `input` has indicated `done` and all `mapper` promises have resolved
+ *
+ * @example
  *
  * Consider a typical processing loop without IterableMapper:
+ *
  * ```typescript
  * const source = new SomeSource();
  * const sourceIds = [1, 2,... 1000];
@@ -109,17 +132,20 @@ type NewElementOrError<NewElement = unknown> = {
  * We could prefetch the next read (300ms) while processing (20ms) and writing (500ms),
  * without changing the order of reads or writes.
  *
- * Using IterableMapper as a prefetcher:
+ * @example
+ *
+ * Using `IterableMapper` as a prefetcher and blocking writes, without changing the order of reads or writes:
+ *
  * ```typescript
  * const source = new SomeSource();
  * const sourceIds = [1, 2,... 1000];
  * // Pre-reads up to 8 items serially and releases in sequential order
  * const sourcePrefetcher = new IterableMapper(sourceIds,
  *   async (sourceId) => source.read(sourceId),
- *   { concurrency: 1 }
+ *   { concurrency: 1, maxUnread: 10 }
  * );
  * const sink = new SomeSink();
- * for await (const item of sourcePrefetcher) {
+ * for await (const item of sourcePrefetcher) {    // may not block for fast sources
  *   const outputItem = doSomeOperation(item);     // takes 20 ms of CPU
  *   await sink.write(outputItem);                 // takes 500 ms of I/O wait, no CPU
  * }
@@ -127,25 +153,60 @@ type NewElementOrError<NewElement = unknown> = {
  *
  * This reduces iteration time to 520ms by overlapping reads with processing/writing.
  *
- * For maximum throughput, make the writes concurrent with
- * IterableQueueMapper (to iterate results with backpressure when too many unread items) or
- * IterableQueueMapperSimple (to handle errors at end without custom iteration or backpressure):
+ * @example
+ *
+ * Using `IterableMapper` as a prefetcher with background writes, without changing the order of reads or writes:
  *
  * ```typescript
  * const source = new SomeSource();
  * const sourceIds = [1, 2,... 1000];
  * const sourcePrefetcher = new IterableMapper(sourceIds,
  *   async (sourceId) => source.read(sourceId),
+ *   { concurrency: 1, maxUnread: 10 }
+ * );
+ * const sink = new SomeSink();
+ * const flusher = new IterableQueueMapperSimple(
+ *   async (outputItem) => sink.write(outputItem),
  *   { concurrency: 1 }
+ * );
+ * for await (const item of sourcePrefetcher) {    // may not block for fast sources
+ *   const outputItem = doSomeOperation(item);     // takes 20 ms of CPU
+ *   await flusher.enqueue(outputItem);            // will periodically block for portion of write time
+ * }
+ * // Wait for all writes to complete
+ * await flusher.onIdle();
+ * // Check for errors
+ * if (flusher.errors.length > 0) {
+ *  // ...
+ * }
+ * ```
+ *
+ * This reduces iteration time to about to `max((max(readTime, writeTime) - cpuOpTime, cpuOpTime))
+ * by overlapping reads and writes with the CPU processing step.
+ * In this contrived example, the loop time is reduced to 500ms - 20ms = 480ms.
+ * In cases where the CPU usage time is higher, the impact can be greater.
+ *
+ * @example
+ *
+ * For maximum throughput, allow out of order reads and writes with
+ * `IterableQueueMapper` (to iterate results with backpressure when too many unread items) or
+ * `IterableQueueMapperSimple` (to handle errors at end without custom iteration and applying backpressure to block further enqueues when `concurrency` items are in process):
+ *
+ * ```typescript
+ * const source = new SomeSource();
+ * const sourceIds = [1, 2,... 1000];
+ * const sourcePrefetcher = new IterableMapper(sourceIds,
+ *   async (sourceId) => source.read(sourceId),
+ *   { concurrency: 10, maxUnread: 20 }
  * );
  * const sink = new SomeSink();
  * const flusher = new IterableQueueMapperSimple(
  *   async (outputItem) => sink.write(outputItem),
  *   { concurrency: 10 }
  * );
- * for await (const item of sourcePrefetcher) {
+ * for await (const item of sourcePrefetcher) {    // typically will not block
  *   const outputItem = doSomeOperation(item);     // takes 20 ms of CPU
- *   await flusher.enqueue(outputItem);           // usually takes no time
+ *   await flusher.enqueue(outputItem);            // typically will not block
  * }
  * // Wait for all writes to complete
  * await flusher.onIdle();
@@ -183,19 +244,6 @@ export class IterableMapper<Element, NewElement> implements AsyncIterable<NewEle
    * @param input Iterated over concurrently, or serially, in the `mapper` function.
    * @param mapper Function called for every item in `input`. Returns a `Promise` or value.
    * @param options IterableMapper options
-   *
-   * Error Handling:
-   * The mapper should ideally handle all errors internally to enable error handling
-   * closest to where they occur. However, if errors do escape the mapper:
-   *
-   * When stopOnMapperError is true (default):
-   * - First error immediately stops processing
-   * - Error is thrown from the AsyncIterator's next() call
-   *
-   * When stopOnMapperError is false:
-   * - Processing continues despite errors
-   * - All errors are collected and thrown together
-   * - Errors are thrown as AggregateError after all items complete
    *
    * @see {@link IterableQueueMapper} for full class documentation
    */

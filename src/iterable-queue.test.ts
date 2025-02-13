@@ -74,7 +74,7 @@ describe('IterableQueue', () => {
       for await (const item of queue) {
         expect(item).toBe(items[iteratedCount]);
         iteratedCount++;
-        expect(Date.now() - startTime).toBeGreaterThanOrEqual(2000);
+        expect(Math.ceil(Date.now() - startTime)).toBeGreaterThanOrEqual(2000);
       }
 
       expect(iteratedCount).toBe(2);
@@ -159,7 +159,7 @@ describe('IterableQueue', () => {
       for await (const item of queue) {
         expect(item).toBe(items[iteratedCount]);
         iteratedCount++;
-        expect(Date.now() - startTime).toBeGreaterThanOrEqual(2000);
+        expect(Math.ceil(Date.now() - startTime)).toBeGreaterThanOrEqual(2000);
       }
 
       expect(iteratedCount).toBe(2);

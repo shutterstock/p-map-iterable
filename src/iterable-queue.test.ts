@@ -61,7 +61,7 @@ describe('IterableQueue', () => {
       // Do not wait for second item to add (it will wait until an enqueue completes)
       setTimeout(() => {
         void queue.enqueue(items[1]);
-      }, 2000);
+      }, 2010);
       setTimeout(() => {
         queue.done();
       }, 3000);

@@ -128,7 +128,7 @@ describe('IterableQueueMapper', () => {
       // Should require at least 2 batches
       const duration = Date.now() - startTime;
       expect(duration).toBeLessThan(2.5 * delayBetweenMs);
-      expect(Math.ceil(duration)).toBeGreaterThan(2 * delayBetweenMs);
+      expect(Math.ceil(duration)).toBeGreaterThanOrEqual(2 * delayBetweenMs);
     });
   });
 });

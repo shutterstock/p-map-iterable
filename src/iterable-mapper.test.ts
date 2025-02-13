@@ -419,6 +419,44 @@ describe('IterableMapper', () => {
     });
   });
 
+  describe('order preservation tests', () => {
+    it('preserves exact sequential order under high load with concurrency 1, maxUnread 8', async () => {
+      const size = 1000;
+      const input = Array.from({ length: size }, (_, i) => ({
+        value: i + 1,
+        ms: Math.floor(Math.random() * 20), // Random delay 0-19ms
+      }));
+
+      const mappedOrder: number[] = [];
+      const iteratedOrder: number[] = [];
+
+      const prefetcher = new IterableMapper(
+        input,
+        async ({ value, ms }): Promise<number> => {
+          await sleep(ms);
+          mappedOrder.push(value);
+          return value;
+        },
+        { concurrency: 1, maxUnread: 8 },
+      );
+
+      for await (const value of prefetcher) {
+        iteratedOrder.push(value);
+        // Add some random delay in consuming to create backpressure
+        await sleep(Math.floor(Math.random() * 20));
+      }
+
+      // Verify exact sequential order preservation
+      expect(iteratedOrder).toHaveLength(size);
+      expect(mappedOrder).toHaveLength(size);
+
+      // Verify that both mapped and iterated orders match the input sequence
+      const expectedOrder = Array.from({ length: size }, (_, i) => i + 1);
+      expect(mappedOrder).toEqual(expectedOrder);
+      expect(iteratedOrder).toEqual(expectedOrder);
+    }, 30000);
+  });
+
   describe('concurrency 1, maxUnread 1', () => {
     const concurrency = 1;
     const maxUnread = 1;

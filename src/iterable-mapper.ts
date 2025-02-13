@@ -115,7 +115,7 @@ type NewElementOrError<NewElement = unknown> = {
  *
  * @example
  *
- * Consider a typical processing loop without IterableMapper:
+ * ### Typical Processing Loop without `IterableMapper`
  *
  * ```typescript
  * const source = new SomeSource();
@@ -134,7 +134,9 @@ type NewElementOrError<NewElement = unknown> = {
  *
  * @example
  *
- * Using `IterableMapper` as a prefetcher and blocking writes, without changing the order of reads or writes:
+ * ### Using `IterableMapper` as Prefetcher with Blocking Sequential Writes
+ *
+ * `concurrency: 1` on the prefetcher preserves the order of the reads and and writes are sequential and blocking (unchanged).
  *
  * ```typescript
  * const source = new SomeSource();
@@ -155,7 +157,10 @@ type NewElementOrError<NewElement = unknown> = {
  *
  * @example
  *
- * Using `IterableMapper` as a prefetcher with background writes, without changing the order of reads or writes:
+ * ### Using `IterableMapper` as Prefetcher with Background Sequential Writes with `IterableQueueMapperSimple`
+ *
+ * `concurrency: 1` on the prefetcher preserves the order of the reads.
+ * `concurrency: 1` on the flusher preserves the order of the writes, but allows the loop to iterate while last write is completing.
  *
  * ```typescript
  * const source = new SomeSource();
@@ -181,12 +186,14 @@ type NewElementOrError<NewElement = unknown> = {
  * }
  * ```
  *
- * This reduces iteration time to about to `max((max(readTime, writeTime) - cpuOpTime, cpuOpTime))
+ * This reduces iteration time to about `max((max(readTime, writeTime) - cpuOpTime, cpuOpTime))`
  * by overlapping reads and writes with the CPU processing step.
  * In this contrived example, the loop time is reduced to 500ms - 20ms = 480ms.
  * In cases where the CPU usage time is higher, the impact can be greater.
  *
  * @example
+ *
+ * ### Using `IterableMapper` as Prefetcher with Out of Order Reads and Background Out of Order Writes with `IterableQueueMapperSimple`
  *
  * For maximum throughput, allow out of order reads and writes with
  * `IterableQueueMapper` (to iterate results with backpressure when too many unread items) or

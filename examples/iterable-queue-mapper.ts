@@ -135,6 +135,7 @@ async function main() {
   await jobAdder;
 
   console.log(`QueuedButUnreadFileSizeGB: ${queuedButUnreadFileSizeGB}`);
+  console.log('Note - It is intended that there are errors in this example');
 }
 
 void main();

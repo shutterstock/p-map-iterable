@@ -89,8 +89,9 @@ describe('IterableQueueMapper', () => {
       expect(loopCount).toBe(max);
       expect(lastTotal).toBe(max);
       // Should require at least 4 batches
+      const duration = Date.now() - startTime;
       expect(Date.now() - startTime).toBeLessThan(5 * delayBetweenMs);
-      expect(Date.now() - startTime).toBeGreaterThan(4 * delayBetweenMs);
+      expect(Math.ceil(duration)).toBeGreaterThan(4 * delayBetweenMs);
     });
 
     it('right number run in parallel - complex', async () => {
@@ -108,7 +109,7 @@ describe('IterableQueueMapper', () => {
       // Next one added should have had to wait for at least one wait period
       void (async () => {
         await prefetcher.enqueue({ value: 5, ms: delayBetweenMs });
-        expect(Date.now() - startTime).toBeGreaterThanOrEqual(delayBetweenMs);
+        expect(Math.ceil(Date.now() - startTime)).toBeGreaterThanOrEqual(delayBetweenMs);
         prefetcher.done();
       })();
 
@@ -125,8 +126,9 @@ describe('IterableQueueMapper', () => {
       expect(lastSeen).toBe(5);
 
       // Should require at least 2 batches
-      expect(Date.now() - startTime).toBeLessThan(2.5 * delayBetweenMs);
-      expect(Date.now() - startTime).toBeGreaterThan(2 * delayBetweenMs);
+      const duration = Date.now() - startTime;
+      expect(duration).toBeLessThan(2.5 * delayBetweenMs);
+      expect(Math.ceil(duration)).toBeGreaterThan(2 * delayBetweenMs);
     });
   });
 });

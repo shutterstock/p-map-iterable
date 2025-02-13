@@ -24,7 +24,7 @@
 <ul class="tsd-hierarchy">
 <li><span class="target">IterableMapperOptions</span></li></ul></section><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/shutterstock/p-map-iterable/blob/3e3c7e6/src/iterable-mapper.ts#L11">iterable-mapper.ts:11</a></li></ul></aside>
+<li>Defined in <a href="https://github.com/shutterstock/p-map-iterable/blob/3b0ea7b/src/iterable-mapper.ts#L11">iterable-mapper.ts:11</a></li></ul></aside>
 <section class="tsd-panel-group tsd-index-group">
 <section class="tsd-panel tsd-index-panel">
 <details class="tsd-index-content tsd-index-accordion" open><summary class="tsd-accordion-summary tsd-index-summary">
@@ -41,38 +41,64 @@
 <section class="tsd-panel tsd-member"><a id="concurrency" class="tsd-anchor"></a>
 <h3 class="tsd-anchor-link"><code class="tsd-tag ts-flagOptional">Optional</code> <code class="tsd-tag ts-flagReadonly">Readonly</code> <span>concurrency</span><a href="#concurrency" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><g stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round" id="icon-anchor"><path stroke="none" d="M0 0h24v24H0z" fill="none"></path><path d="M10 14a3.5 3.5 0 0 0 5 0l4 -4a3.5 3.5 0 0 0 -5 -5l-.5 .5"></path><path d="M14 10a3.5 3.5 0 0 0 -5 0l-4 4a3.5 3.5 0 0 0 5 5l.5 -.5"></path></g></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">concurrency</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">number</span></div>
-<div class="tsd-comment tsd-typography"><p>Number of concurrently pending promises returned by <code>mapper</code>.</p>
-<p>Must be an integer from 1 and up or <code>Infinity</code>, must be &lt;= <code>maxUnread</code>.</p>
+<div class="tsd-comment tsd-typography"><p>Maximum number of concurrent invocations of <code>mapper</code> to run at once.</p>
+<p>The number of concurrent invocations is dynamically adjusted based on the <code>maxUnread</code> limit:</p>
+<ul>
+<li>If there are no unread items and <code>maxUnread</code> is 10 with <code>concurrency</code> of 4, all 4 mappers can run.</li>
+<li>If there are already 8 unread items in the queue, only 2 mappers will run to avoid exceeding
+the <code>maxUnread</code> limit of 10.</li>
+<li>If there are 10 unread items, no mappers will run until an item is consumed from the queue.</li>
+</ul>
+<p>This ensures efficient processing while maintaining backpressure through the <code>maxUnread</code> limit.</p>
+<p>Setting <code>concurrency</code> to 1 enables serial processing, preserving the order of items
+while still benefiting from the backpressure mechanism.</p>
+<p>Must be an integer from 1 and up or <code>Infinity</code>, and must be &lt;= <code>maxUnread</code>.</p>
 </div>
 <div class="tsd-comment tsd-typography">
 <h4>Default</h4><pre><code class="language-ts"><span class="hl-4">4</span>
 </code><button>Copy</button></pre>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/shutterstock/p-map-iterable/blob/3e3c7e6/src/iterable-mapper.ts#L19">iterable-mapper.ts:19</a></li></ul></aside></section>
+<li>Defined in <a href="https://github.com/shutterstock/p-map-iterable/blob/3b0ea7b/src/iterable-mapper.ts#L30">iterable-mapper.ts:30</a></li></ul></aside></section>
 <section class="tsd-panel tsd-member"><a id="maxUnread" class="tsd-anchor"></a>
 <h3 class="tsd-anchor-link"><code class="tsd-tag ts-flagOptional">Optional</code> <code class="tsd-tag ts-flagReadonly">Readonly</code> <span>max<wbr/>Unread</span><a href="#maxUnread" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">max<wbr/>Unread</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">number</span></div>
-<div class="tsd-comment tsd-typography"><p>Number of pending unread iterable items.</p>
-<p>Must be an integer from 1 and up or <code>Infinity</code>, must be &gt;= <code>concurrency</code>.</p>
+<div class="tsd-comment tsd-typography"><p>Maximum number of unread items allowed to accumulate before applying backpressure.</p>
+<p>This parameter is crucial for controlling memory usage and system load by:</p>
+<ol>
+<li>Limiting the number of processed but unread items in the queue</li>
+<li>Automatically pausing mapper execution when the limit is reached</li>
+<li>Resuming processing when items are consumed, maintaining optimal throughput</li>
+</ol>
+<p>For example, when reading from a slow database:</p>
+<ul>
+<li>With maxUnread=10, only 10 items will be fetched before the consumer reads them</li>
+<li>Additional items won&#39;t be fetched until the consumer reads existing items</li>
+<li>This prevents runaway memory usage for items that cannot be processed quickly enough</li>
+</ul>
+<p>Must be an integer from 1 and up or <code>Infinity</code>, and must be &gt;= <code>concurrency</code>.
+It is not typical to set this value to <code>Infinity</code>, but rather to a value such as 1 to 10.</p>
 </div>
 <div class="tsd-comment tsd-typography">
 <h4>Default</h4><pre><code class="language-ts"><span class="hl-4">8</span>
 </code><button>Copy</button></pre>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/shutterstock/p-map-iterable/blob/3e3c7e6/src/iterable-mapper.ts#L28">iterable-mapper.ts:28</a></li></ul></aside></section>
+<li>Defined in <a href="https://github.com/shutterstock/p-map-iterable/blob/3b0ea7b/src/iterable-mapper.ts#L50">iterable-mapper.ts:50</a></li></ul></aside></section>
 <section class="tsd-panel tsd-member"><a id="stopOnMapperError" class="tsd-anchor"></a>
 <h3 class="tsd-anchor-link"><code class="tsd-tag ts-flagOptional">Optional</code> <code class="tsd-tag ts-flagReadonly">Readonly</code> <span>stop<wbr/>On<wbr/>Mapper<wbr/>Error</span><a href="#stopOnMapperError" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">stop<wbr/>On<wbr/>Mapper<wbr/>Error</span><span class="tsd-signature-symbol">?:</span> <span class="tsd-signature-type">boolean</span></div>
-<div class="tsd-comment tsd-typography"><p>When set to <code>false</code>, instead of stopping when a promise rejects, it will wait for all the promises to settle and then reject with an <a href="https://github.com/sindresorhus/aggregate-error">aggregated error</a> containing all the errors from the rejected promises.</p>
+<div class="tsd-comment tsd-typography"><p>When set to <code>false</code>, instead of stopping when a promise rejects, it will wait for all
+the promises to settle and then reject with an
+<a href="https://github.com/sindresorhus/aggregate-error">aggregated error</a> containing all the
+errors from the rejected promises.</p>
 </div>
 <div class="tsd-comment tsd-typography">
-<h4>Default</h4><pre><code class="language-ts"><span class="hl-5">true</span>
+<h4>Default</h4><pre><code class="language-ts"><span class="hl-0">true</span>
 </code><button>Copy</button></pre>
 </div><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/shutterstock/p-map-iterable/blob/3e3c7e6/src/iterable-mapper.ts#L35">iterable-mapper.ts:35</a></li></ul></aside></section></section></div>
+<li>Defined in <a href="https://github.com/shutterstock/p-map-iterable/blob/3b0ea7b/src/iterable-mapper.ts#L60">iterable-mapper.ts:60</a></li></ul></aside></section></section></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">
@@ -106,8 +132,8 @@
 <li><a href="../classes/Queue.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-128"></use></svg><span>Queue</span></a></li>
 <li><a href="BlockingQueueOptions.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><g id="icon-256"><rect fill="var(--color-icon-background)" stroke="var(--color-ts-interface)" stroke-width="1.5" x="1" y="1" width="22" height="22" rx="6"></rect><path d="M9.51 16V15.016H11.298V8.224H9.51V7.24H14.19V8.224H12.402V15.016H14.19V16H9.51Z" fill="var(--color-text)"></path></g></svg><span>Blocking<wbr/>Queue<wbr/>Options</span></a></li>
 <li><a href="IterableMapperOptions.html" class="current"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-256"></use></svg><span>Iterable<wbr/>Mapper<wbr/>Options</span></a></li>
-<li><a href="IterableQueueMapperOptions.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-256"></use></svg><span>Iterable<wbr/>Queue<wbr/>Mapper<wbr/>Options</span></a></li>
-<li><a href="../types/IterableQueueOptions.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><g id="icon-4194304"><rect fill="var(--color-icon-background)" stroke="var(--color-ts-type-alias)" stroke-width="1.5" x="1" y="1" width="22" height="22" rx="6"></rect><path d="M11.31 16V8.224H8.91V7.24H14.79V8.224H12.39V16H11.31Z" fill="var(--color-text)"></path></g></svg><span>Iterable<wbr/>Queue<wbr/>Options</span></a></li>
+<li><a href="../types/IterableQueueMapperOptions.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><g id="icon-4194304"><rect fill="var(--color-icon-background)" stroke="var(--color-ts-type-alias)" stroke-width="1.5" x="1" y="1" width="22" height="22" rx="6"></rect><path d="M11.31 16V8.224H8.91V7.24H14.79V8.224H12.39V16H11.31Z" fill="var(--color-text)"></path></g></svg><span>Iterable<wbr/>Queue<wbr/>Mapper<wbr/>Options</span></a></li>
+<li><a href="../types/IterableQueueOptions.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-4194304"></use></svg><span>Iterable<wbr/>Queue<wbr/>Options</span></a></li>
 <li><a href="../types/Mapper.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-4194304"></use></svg><span>Mapper</span></a></li></ul></nav></div></div></div>
 <div class="tsd-generator">
 <p>Generated using <a href="https://typedoc.org/" target="_blank">TypeDoc</a></p></div>

@@ -17,25 +17,38 @@
 <h1>Class IterableQueueMapper&lt;Element, NewElement&gt;</h1></div>
 <section class="tsd-panel tsd-comment">
 <div class="tsd-comment tsd-typography"><p>Accepts queue items via <code>enqueue</code> and calls the <code>mapper</code> on them
-with specified concurrency, storing the
-<code>mapper</code> result in a queue of specified max size, before
-being iterated / read by the caller.  The <code>enqueue</code> method will block if
-the queue is full, until an item is read.</p>
+with specified <code>concurrency</code>, storing the <code>mapper</code> result in a queue
+of <code>maxUnread</code> size, before being iterated / read by the caller.
+The <code>enqueue</code> method will block if the queue is full, until an item is read.</p>
 </div>
 <div class="tsd-comment tsd-typography">
-<h4>Remarks</h4><p>This allows performing a concurrent mapping with
-back pressure for items added after queue creation
-via a method call.</p>
-<p>Because items are added via a method call it is possible to
-chain an <code>IterableMapper</code> that prefetches files and processes them,
-with an <code>IterableQueueMapper</code> that processes the results of the
-<code>mapper</code> function of the <code>IterableMapper</code>.</p>
-<p>Typical use case is for a <code>background uploader</code> that prevents
-the producer from racing ahead of the upload process, consuming
-too much memory or disk space. As items are ready for upload
-they are added to the queue with the <code>enqueue</code> method, which is
-<code>await</code>ed by the caller.  If the queue has room then <code>enqueue</code>
-will return immediately, otherwise it will block until there is room.</p>
+<h4>Remarks</h4><a id="md:typical-use-case" class="tsd-anchor"></a><h3><a href="#md:typical-use-case">Typical Use Case</a></h3><ul>
+<li>Pushing items to an async I/O destination</li>
+<li>In the simple sequential (<code>concurrency: 1</code>) case, allows 1 item to be flushed async while caller prepares next item</li>
+<li>Results of the flushed items are needed in a subsequent step (if they are not, use <code>IterableQueueMapperSimple</code>)</li>
+<li>Prevents the producer from racing ahead of the consumer if <code>maxUnread</code> is reached</li>
+</ul>
+<a id="md:error-handling" class="tsd-anchor"></a><h3><a href="#md:error-handling">Error Handling</a></h3><p>  The mapper should ideally handle all errors internally to enable error handling
+  closest to where they occur. However, if errors do escape the mapper:</p>
+<p>  When <code>stopOnMapperError</code> is true (default):</p>
+<ul>
+<li>First error immediately stops processing</li>
+<li>Error is thrown from the <code>AsyncIterator</code>&#39;s next() call</li>
+</ul>
+<p>  When <code>stopOnMapperError</code> is false:</p>
+<ul>
+<li>Processing continues despite errors</li>
+<li>All errors are collected and thrown together</li>
+<li>Errors are thrown as <code>AggregateError</code> after all items complete</li>
+</ul>
+<a id="md:usage" class="tsd-anchor"></a><h3><a href="#md:usage">Usage</a></h3><ul>
+<li>Items are added to the queue via the <code>await enqueue()</code> method</li>
+<li>IMPORTANT: <code>await enqueue()</code> method will block until a slot is available, if queue is full</li>
+<li>Call <code>done()</code> when no more items will be enqueued</li>
+<li>IMPORTANT: Always <code>await onIdle()</code> to ensure all items are processed</li>
+</ul>
+
+<h4>See</h4><p><a href="IterableMapper.html" class="tsd-kind-class">IterableMapper</a> for underlying mapper implementation and examples of combined usage</p>
 </div></section> 
 <section class="tsd-panel">
 <h4>Type Parameters</h4>
@@ -53,7 +66,7 @@ will return immediately, otherwise it will block until there is room.</p>
 <ul class="tsd-hierarchy">
 <li><span class="tsd-signature-type ">AsyncIterable</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type tsd-kind-type-parameter">NewElement</span><span class="tsd-signature-symbol">&gt;</span></li></ul></section><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/shutterstock/p-map-iterable/blob/3e3c7e6/src/iterable-queue-mapper.ts#L61">iterable-queue-mapper.ts:61</a></li></ul></aside>
+<li>Defined in <a href="https://github.com/shutterstock/p-map-iterable/blob/3b0ea7b/src/iterable-queue-mapper.ts#L49">iterable-queue-mapper.ts:49</a></li></ul></aside>
 <section class="tsd-panel-group tsd-index-group">
 <section class="tsd-panel tsd-index-panel">
 <details class="tsd-index-content tsd-index-accordion" open><summary class="tsd-accordion-summary tsd-index-summary">
@@ -82,7 +95,8 @@ will return immediately, otherwise it will block until there is room.</p>
 <ul class="tsd-signatures">
 <li class="tsd-signature tsd-anchor-link" id="constructor.new_IterableQueueMapper"><span class="tsd-kind-constructor-signature">new <wbr/>Iterable<wbr/>Queue<wbr/>Mapper</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type tsd-kind-type-parameter">Element</span><span class="tsd-signature-symbol">, </span><span class="tsd-signature-type tsd-kind-type-parameter">NewElement</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">mapper</span>, <span class="tsd-kind-parameter">options</span><span class="tsd-signature-symbol">?</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><a href="IterableQueueMapper.html" class="tsd-signature-type tsd-kind-class">IterableQueueMapper</a><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type tsd-kind-type-parameter">Element</span><span class="tsd-signature-symbol">, </span><span class="tsd-signature-type tsd-kind-type-parameter">NewElement</span><span class="tsd-signature-symbol">&gt;</span><a href="#constructor.new_IterableQueueMapper" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></li>
 <li class="tsd-description">
-<div class="tsd-comment tsd-typography"><p>Create a new <code>IterableQueueMapper</code></p>
+<div class="tsd-comment tsd-typography"><p>Create a new <code>IterableQueueMapper</code>, which uses <code>IterableMapper</code> underneath, and exposes a
+queue interface for adding items that are not exposed via an iterator.</p>
 </div>
 <section class="tsd-panel">
 <h4>Type Parameters</h4>
@@ -96,42 +110,35 @@ will return immediately, otherwise it will block until there is room.</p>
 <ul class="tsd-parameter-list">
 <li>
 <h5><span class="tsd-kind-parameter">mapper</span>: <a href="../types/Mapper.html" class="tsd-signature-type tsd-kind-type-alias">Mapper</a><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type tsd-kind-type-parameter">Element</span><span class="tsd-signature-symbol">, </span><span class="tsd-signature-type tsd-kind-type-parameter">NewElement</span><span class="tsd-signature-symbol">&gt;</span></h5>
-<div class="tsd-comment tsd-typography"><p>Function which is called for every item in <code>input</code>.
-   Expected to return a <code>Promise</code> or value.</p>
-<p>   The <code>mapper</code> <em>should</em> handle all errors and not allow an error to be thrown
-   out of the <code>mapper</code> function as this enables the best handling of errors
-   closest to the time that they occur.</p>
-<p>   If the <code>mapper</code> function does allow an error to be thrown then the
-  <code>stopOnMapperError</code> option controls the behavior:
-     - <code>stopOnMapperError</code>: <code>true</code> - will throw the error
-       out of <code>next</code> or the <code>AsyncIterator</code> returned from <code>[Symbol.asyncIterator]</code>
-       and stop processing.
-    - <code>stopOnMapperError</code>: <code>false</code> - will continue processing
-       and accumulate the errors to be thrown from <code>next</code> or the <code>AsyncIterator</code>
-       returned from <code>[Symbol.asyncIterator]</code> when all items have been processed.</p>
+<div class="tsd-comment tsd-typography"><p>Function called for every enqueued item. Returns a <code>Promise</code> or value.</p>
 </div>
 <div class="tsd-comment tsd-typography"></div></li>
 <li>
-<h5><span class="tsd-kind-parameter">options</span>: <a href="../interfaces/IterableQueueMapperOptions.html" class="tsd-signature-type tsd-kind-interface">IterableQueueMapperOptions</a><span class="tsd-signature-symbol"> = {}</span></h5>
+<h5><span class="tsd-kind-parameter">options</span>: <a href="../interfaces/IterableMapperOptions.html" class="tsd-signature-type tsd-kind-interface">IterableMapperOptions</a><span class="tsd-signature-symbol"> = {}</span></h5>
 <div class="tsd-comment tsd-typography"><p>IterableQueueMapper options</p>
 </div>
 <div class="tsd-comment tsd-typography"></div></li></ul></div>
 <h4 class="tsd-returns-title">Returns <a href="IterableQueueMapper.html" class="tsd-signature-type tsd-kind-class">IterableQueueMapper</a><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type tsd-kind-type-parameter">Element</span><span class="tsd-signature-symbol">, </span><span class="tsd-signature-type tsd-kind-type-parameter">NewElement</span><span class="tsd-signature-symbol">&gt;</span></h4>
-<div class="tsd-comment tsd-typography"></div><aside class="tsd-sources">
+<div class="tsd-comment tsd-typography">
+<h4>See</h4><ul>
+<li><a href="IterableQueueMapper.html" class="tsd-kind-class">IterableQueueMapper</a> for full class documentation</li>
+<li><a href="IterableMapper.html" class="tsd-kind-class">IterableMapper</a> for underlying mapper implementation and examples of combined usage</li>
+</ul>
+</div><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/shutterstock/p-map-iterable/blob/3e3c7e6/src/iterable-queue-mapper.ts#L86">iterable-queue-mapper.ts:86</a></li></ul></aside></li></ul></section></section>
+<li>Defined in <a href="https://github.com/shutterstock/p-map-iterable/blob/3b0ea7b/src/iterable-queue-mapper.ts#L64">iterable-queue-mapper.ts:64</a></li></ul></aside></li></ul></section></section>
 <section class="tsd-panel-group tsd-member-group">
 <h2>Properties</h2>
 <section class="tsd-panel tsd-member tsd-is-private"><a id="_iterableMapper" class="tsd-anchor"></a>
 <h3 class="tsd-anchor-link"><code class="tsd-tag ts-flagPrivate">Private</code> <span>_iterable<wbr/>Mapper</span><a href="#_iterableMapper" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">_iterable<wbr/>Mapper</span><span class="tsd-signature-symbol">:</span> <a href="IterableMapper.html" class="tsd-signature-type tsd-kind-class">IterableMapper</a><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type tsd-kind-type-parameter">Element</span><span class="tsd-signature-symbol">, </span><span class="tsd-signature-type tsd-kind-type-parameter">NewElement</span><span class="tsd-signature-symbol">&gt;</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/shutterstock/p-map-iterable/blob/3e3c7e6/src/iterable-queue-mapper.ts#L62">iterable-queue-mapper.ts:62</a></li></ul></aside></section>
+<li>Defined in <a href="https://github.com/shutterstock/p-map-iterable/blob/3b0ea7b/src/iterable-queue-mapper.ts#L50">iterable-queue-mapper.ts:50</a></li></ul></aside></section>
 <section class="tsd-panel tsd-member tsd-is-private"><a id="_sourceIterable" class="tsd-anchor"></a>
 <h3 class="tsd-anchor-link"><code class="tsd-tag ts-flagPrivate">Private</code> <span>_source<wbr/>Iterable</span><a href="#_sourceIterable" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></h3>
 <div class="tsd-signature"><span class="tsd-kind-property">_source<wbr/>Iterable</span><span class="tsd-signature-symbol">:</span> <a href="IterableQueue.html" class="tsd-signature-type tsd-kind-class">IterableQueue</a><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type tsd-kind-type-parameter">Element</span><span class="tsd-signature-symbol">&gt;</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/shutterstock/p-map-iterable/blob/3e3c7e6/src/iterable-queue-mapper.ts#L64">iterable-queue-mapper.ts:64</a></li></ul></aside></section></section>
+<li>Defined in <a href="https://github.com/shutterstock/p-map-iterable/blob/3b0ea7b/src/iterable-queue-mapper.ts#L52">iterable-queue-mapper.ts:52</a></li></ul></aside></section></section>
 <section class="tsd-panel-group tsd-member-group">
 <h2>Methods</h2>
 <section class="tsd-panel tsd-member"><a id="_asyncIterator_" class="tsd-anchor"></a>
@@ -142,7 +149,7 @@ will return immediately, otherwise it will block until there is room.</p>
 <h4 class="tsd-returns-title">Returns <span class="tsd-signature-type ">AsyncIterator</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type tsd-kind-type-parameter">NewElement</span><span class="tsd-signature-symbol">, </span><span class="tsd-signature-type">any</span><span class="tsd-signature-symbol">, </span><span class="tsd-signature-type">undefined</span><span class="tsd-signature-symbol">&gt;</span></h4><aside class="tsd-sources">
 <p>Implementation of AsyncIterable.[asyncIterator]</p>
 <ul>
-<li>Defined in <a href="https://github.com/shutterstock/p-map-iterable/blob/3e3c7e6/src/iterable-queue-mapper.ts#L93">iterable-queue-mapper.ts:93</a></li></ul></aside></li></ul></section>
+<li>Defined in <a href="https://github.com/shutterstock/p-map-iterable/blob/3b0ea7b/src/iterable-queue-mapper.ts#L71">iterable-queue-mapper.ts:71</a></li></ul></aside></li></ul></section>
 <section class="tsd-panel tsd-member"><a id="done" class="tsd-anchor"></a>
 <h3 class="tsd-anchor-link"><span>done</span><a href="#done" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></h3>
 <ul class="tsd-signatures">
@@ -154,7 +161,7 @@ will return immediately, otherwise it will block until there is room.</p>
 <h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">void</span></h4>
 <div class="tsd-comment tsd-typography"></div><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/shutterstock/p-map-iterable/blob/3e3c7e6/src/iterable-queue-mapper.ts#L120">iterable-queue-mapper.ts:120</a></li></ul></aside></li></ul></section>
+<li>Defined in <a href="https://github.com/shutterstock/p-map-iterable/blob/3b0ea7b/src/iterable-queue-mapper.ts#L98">iterable-queue-mapper.ts:98</a></li></ul></aside></li></ul></section>
 <section class="tsd-panel tsd-member"><a id="enqueue" class="tsd-anchor"></a>
 <h3 class="tsd-anchor-link"><span>enqueue</span><a href="#enqueue" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></h3>
 <ul class="tsd-signatures">
@@ -173,7 +180,7 @@ will return immediately, otherwise it will block until there is room.</p>
 <h4 class="tsd-returns-title">Returns <span class="tsd-signature-type ">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">void</span><span class="tsd-signature-symbol">&gt;</span></h4>
 <div class="tsd-comment tsd-typography"></div><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/shutterstock/p-map-iterable/blob/3e3c7e6/src/iterable-queue-mapper.ts#L111">iterable-queue-mapper.ts:111</a></li></ul></aside></li></ul></section>
+<li>Defined in <a href="https://github.com/shutterstock/p-map-iterable/blob/3b0ea7b/src/iterable-queue-mapper.ts#L89">iterable-queue-mapper.ts:89</a></li></ul></aside></li></ul></section>
 <section class="tsd-panel tsd-member"><a id="next" class="tsd-anchor"></a>
 <h3 class="tsd-anchor-link"><span>next</span><a href="#next" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></h3>
 <ul class="tsd-signatures">
@@ -186,7 +193,7 @@ Called every time an item is needed</p>
 
 <div class="tsd-comment tsd-typography"></div><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/shutterstock/p-map-iterable/blob/3e3c7e6/src/iterable-queue-mapper.ts#L102">iterable-queue-mapper.ts:102</a></li></ul></aside></li></ul></section></section></div>
+<li>Defined in <a href="https://github.com/shutterstock/p-map-iterable/blob/3b0ea7b/src/iterable-queue-mapper.ts#L80">iterable-queue-mapper.ts:80</a></li></ul></aside></li></ul></section></section></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">
@@ -206,6 +213,15 @@ Called every time an item is needed</p>
 <h3><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><use href="#icon-chevronDown"></use></svg>On This Page</h3></summary>
 <div class="tsd-accordion-details">
 <ul>
+<li>
+<ul>
+<li><a href="#md:typical-use-case"><span>Typical <wbr/>Use <wbr/>Case</span></a></li>
+<li>
+<ul>
+<li><a href="#md:error-handling"><span>Error <wbr/>Handling</span></a></li>
+<li>
+<ul>
+<li><a href="#md:usage"><span>Usage</span></a></li></ul></li></ul></li></ul></li>
 <li><a href="#constructor" class=""><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-512"></use></svg><span>constructor</span></a></li>
 <li><a href="#_iterableMapper" class="tsd-is-private"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-1024"></use></svg><span>_iterable<wbr/>Mapper</span></a></li>
 <li><a href="#_sourceIterable" class="tsd-is-private"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-1024"></use></svg><span>_source<wbr/>Iterable</span></a></li>
@@ -224,8 +240,8 @@ Called every time an item is needed</p>
 <li><a href="Queue.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-128"></use></svg><span>Queue</span></a></li>
 <li><a href="../interfaces/BlockingQueueOptions.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><g id="icon-256"><rect fill="var(--color-icon-background)" stroke="var(--color-ts-interface)" stroke-width="1.5" x="1" y="1" width="22" height="22" rx="6"></rect><path d="M9.51 16V15.016H11.298V8.224H9.51V7.24H14.19V8.224H12.402V15.016H14.19V16H9.51Z" fill="var(--color-text)"></path></g></svg><span>Blocking<wbr/>Queue<wbr/>Options</span></a></li>
 <li><a href="../interfaces/IterableMapperOptions.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-256"></use></svg><span>Iterable<wbr/>Mapper<wbr/>Options</span></a></li>
-<li><a href="../interfaces/IterableQueueMapperOptions.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-256"></use></svg><span>Iterable<wbr/>Queue<wbr/>Mapper<wbr/>Options</span></a></li>
-<li><a href="../types/IterableQueueOptions.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><g id="icon-4194304"><rect fill="var(--color-icon-background)" stroke="var(--color-ts-type-alias)" stroke-width="1.5" x="1" y="1" width="22" height="22" rx="6"></rect><path d="M11.31 16V8.224H8.91V7.24H14.79V8.224H12.39V16H11.31Z" fill="var(--color-text)"></path></g></svg><span>Iterable<wbr/>Queue<wbr/>Options</span></a></li>
+<li><a href="../types/IterableQueueMapperOptions.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><g id="icon-4194304"><rect fill="var(--color-icon-background)" stroke="var(--color-ts-type-alias)" stroke-width="1.5" x="1" y="1" width="22" height="22" rx="6"></rect><path d="M11.31 16V8.224H8.91V7.24H14.79V8.224H12.39V16H11.31Z" fill="var(--color-text)"></path></g></svg><span>Iterable<wbr/>Queue<wbr/>Mapper<wbr/>Options</span></a></li>
+<li><a href="../types/IterableQueueOptions.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-4194304"></use></svg><span>Iterable<wbr/>Queue<wbr/>Options</span></a></li>
 <li><a href="../types/Mapper.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-4194304"></use></svg><span>Mapper</span></a></li></ul></nav></div></div></div>
 <div class="tsd-generator">
 <p>Generated using <a href="https://typedoc.org/" target="_blank">TypeDoc</a></p></div>

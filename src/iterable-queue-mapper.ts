@@ -1,62 +1,50 @@
 //
 // 2021-08-25 - Initially based on: https://raw.githubusercontent.com/sindresorhus/p-map/main/index.js
 //
-import { IterableMapper, Mapper } from './iterable-mapper';
+import { IterableMapper, IterableMapperOptions, Mapper } from './iterable-mapper';
 import { IterableQueue } from './iterable-queue';
 
-export interface IterableQueueMapperOptions {
-  /**
-   * Number of concurrently pending promises returned by `mapper`.
-   *
-   * Must be an integer from 1 and up or `Infinity`, must be <= `maxUnread`.
-   *
-   * @default 4
-   */
-  readonly concurrency?: number;
-
-  /**
-   * Number of pending unread iterable items.
-   *
-   * Must be an integer from 1 and up or `Infinity`, must be >= `concurrency`.
-   *
-   * @default 8
-   */
-  readonly maxUnread?: number;
-
-  /**
-   * When set to `false`, instead of stopping when a promise rejects, it will wait for all the promises to settle and then reject with an [aggregated error](https://github.com/sindresorhus/aggregate-error) containing all the errors from the rejected promises.
-   *
-   * @default true
-   */
-  readonly stopOnMapperError?: boolean;
-}
+/**
+ * Options for IterableQueueMapper
+ */
+export type IterableQueueMapperOptions = IterableMapperOptions;
 
 /**
  * Accepts queue items via `enqueue` and calls the `mapper` on them
- * with specified concurrency, storing the
- * `mapper` result in a queue of specified max size, before
- * being iterated / read by the caller.  The `enqueue` method will block if
- * the queue is full, until an item is read.
+ * with specified `concurrency`, storing the `mapper` result in a queue
+ * of `maxUnread` size, before being iterated / read by the caller.
+ * The `enqueue` method will block if the queue is full, until an item is read.
  *
  * @remarks
  *
- * This allows performing a concurrent mapping with
- * back pressure for items added after queue creation
- * via a method call.
+ * ### Typical Use Case
+ * - Pushing items to an async I/O destination
+ * - In the simple sequential (`concurrency: 1`) case, allows 1 item to be flushed async while caller prepares next item
+ * - Results of the flushed items are needed in a subsequent step (if they are not, use `IterableQueueMapperSimple`)
+ * - Prevents the producer from racing ahead of the consumer if `maxUnread` is reached
  *
- * Because items are added via a method call it is possible to
- * chain an `IterableMapper` that prefetches files and processes them,
- * with an `IterableQueueMapper` that processes the results of the
- * `mapper` function of the `IterableMapper`.
+ * ### Error Handling
+ *   The mapper should ideally handle all errors internally to enable error handling
+ *   closest to where they occur. However, if errors do escape the mapper:
  *
- * Typical use case is for a `background uploader` that prevents
- * the producer from racing ahead of the upload process, consuming
- * too much memory or disk space. As items are ready for upload
- * they are added to the queue with the `enqueue` method, which is
- * `await`ed by the caller.  If the queue has room then `enqueue`
- * will return immediately, otherwise it will block until there is room.
+ *   When `stopOnMapperError` is true (default):
+ *   - First error immediately stops processing
+ *   - Error is thrown from the `AsyncIterator`'s next() call
+ *
+ *   When `stopOnMapperError` is false:
+ *   - Processing continues despite errors
+ *   - All errors are collected and thrown together
+ *   - Errors are thrown as `AggregateError` after all items complete
+ *
+ * ### Usage
+ * - Items are added to the queue via the `await enqueue()` method
+ * - IMPORTANT: `await enqueue()` method will block until a slot is available, if queue is full
+ * - Call `done()` when no more items will be enqueued
+ * - IMPORTANT: Always `await onIdle()` to ensure all items are processed
  *
  * @category Enqueue Input
+ *
+ * @see {@link IterableMapper} for underlying mapper implementation and examples of combined usage
  */
 export class IterableQueueMapper<Element, NewElement> implements AsyncIterable<NewElement> {
   private _iterableMapper: IterableMapper<Element, NewElement>;
@@ -64,24 +52,14 @@ export class IterableQueueMapper<Element, NewElement> implements AsyncIterable<N
   private _sourceIterable: IterableQueue<Element>;
 
   /**
-   * Create a new `IterableQueueMapper`
+   * Create a new `IterableQueueMapper`, which uses `IterableMapper` underneath, and exposes a
+   * queue interface for adding items that are not exposed via an iterator.
    *
-   * @param mapper Function which is called for every item in `input`.
-   *    Expected to return a `Promise` or value.
-   *
-   *    The `mapper` *should* handle all errors and not allow an error to be thrown
-   *    out of the `mapper` function as this enables the best handling of errors
-   *    closest to the time that they occur.
-   *
-   *    If the `mapper` function does allow an error to be thrown then the
-   *   `stopOnMapperError` option controls the behavior:
-   *      - `stopOnMapperError`: `true` - will throw the error
-   *        out of `next` or the `AsyncIterator` returned from `[Symbol.asyncIterator]`
-   *        and stop processing.
-   *     - `stopOnMapperError`: `false` - will continue processing
-   *        and accumulate the errors to be thrown from `next` or the `AsyncIterator`
-   *        returned from `[Symbol.asyncIterator]` when all items have been processed.
+   * @param mapper Function called for every enqueued item. Returns a `Promise` or value.
    * @param options IterableQueueMapper options
+   *
+   * @see {@link IterableQueueMapper} for full class documentation
+   * @see {@link IterableMapper} for underlying mapper implementation and examples of combined usage
    */
   constructor(mapper: Mapper<Element, NewElement>, options: IterableQueueMapperOptions = {}) {
     this._sourceIterable = new IterableQueue({

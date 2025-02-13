@@ -78,7 +78,7 @@ describe('BlockingQueue', () => {
       expect(await queue.dequeue()).toBe(1);
       expect(Date.now() - startTime).toBeLessThan(2000);
       expect(await queue.dequeue()).toBe(2);
-      expect(Date.now() - startTime).toBeGreaterThanOrEqual(2000);
+      expect(Math.ceil(Date.now() - startTime)).toBeGreaterThanOrEqual(2000);
 
       queue.done();
     });
@@ -179,7 +179,7 @@ describe('BlockingQueue', () => {
       expect(await queue.dequeue()).toBe(1);
       const startTime = Date.now();
       expect(await queue.dequeue()).toBe(2);
-      const duration = Date.now() - startTime;
+      const duration = Math.ceil(Date.now() - startTime);
       expect(duration).toBeGreaterThanOrEqual(2000);
 
       queue.done();

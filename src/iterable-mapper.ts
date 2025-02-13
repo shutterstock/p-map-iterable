@@ -10,25 +10,50 @@ import { IterableQueue } from './iterable-queue';
  */
 export interface IterableMapperOptions {
   /**
-   * Number of concurrently pending promises returned by `mapper`.
+   * Maximum number of concurrent invocations of `mapper` to run at once.
    *
-   * Must be an integer from 1 and up or `Infinity`, must be <= `maxUnread`.
+   * The number of concurrent invocations is dynamically adjusted based on the `maxUnread` limit:
+   * - If there are no unread items and `maxUnread` is 10 with `concurrency` of 4, all 4 mappers can run.
+   * - If there are already 8 unread items in the queue, only 2 mappers will run to avoid exceeding
+   *   the `maxUnread` limit of 10.
+   * - If there are 10 unread items, no mappers will run until an item is consumed from the queue.
+   *
+   * This ensures efficient processing while maintaining backpressure through the `maxUnread` limit.
+   *
+   * Setting `concurrency` to 1 enables serial processing, preserving the order of items
+   * while still benefiting from the backpressure mechanism.
+   *
+   * Must be an integer from 1 and up or `Infinity`, and must be <= `maxUnread`.
    *
    * @default 4
    */
   readonly concurrency?: number;
 
   /**
-   * Number of pending unread iterable items.
+   * Maximum number of unread items allowed to accumulate before applying backpressure.
    *
-   * Must be an integer from 1 and up or `Infinity`, must be >= `concurrency`.
+   * This parameter is crucial for controlling memory usage and system load by:
+   * 1. Limiting the number of processed but unread items in the queue
+   * 2. Automatically pausing mapper execution when the limit is reached
+   * 3. Resuming processing when items are consumed, maintaining optimal throughput
+   *
+   * For example, when reading from a slow database:
+   * - With maxUnread=10, only 10 items will be fetched before the consumer reads them
+   * - Additional items won't be fetched until the consumer reads existing items
+   * - This prevents runaway memory usage for items that cannot be processed quickly enough
+   *
+   * Must be an integer from 1 and up or `Infinity`, and must be >= `concurrency`.
+   * It is not typical to set this value to `Infinity`, but rather to a value such as 1 to 10.
    *
    * @default 8
    */
   readonly maxUnread?: number;
 
   /**
-   * When set to `false`, instead of stopping when a promise rejects, it will wait for all the promises to settle and then reject with an [aggregated error](https://github.com/sindresorhus/aggregate-error) containing all the errors from the rejected promises.
+   * When set to `false`, instead of stopping when a promise rejects, it will wait for all
+   * the promises to settle and then reject with an
+   * [aggregated error](https://github.com/sindresorhus/aggregate-error) containing all the
+   * errors from the rejected promises.
    *
    * @default true
    */
@@ -64,13 +89,70 @@ type NewElementOrError<NewElement = unknown> = {
  *
  * @remarks
  *
- * This allows performing a concurrent mapping with
- * back pressure (won't iterate all source items if the consumer is
- * not reading).
+ * Optimized for I/O-bound operations (e.g., fetching data, reading files) rather than
+ * CPU-intensive tasks. The concurrent processing with backpressure ensures efficient
+ * resource utilization without overwhelming memory or system resources.
  *
- * Typical use case is for a `prefetcher` that ensures that items
- * are always ready for the consumer but that large numbers of items
- * are not processed before the consumer is ready for them.
+ * Consider a typical processing loop without IterableMapper:
+ * ```typescript
+ * const source = new SomeSource();
+ * const sourceIds = [1, 2,... 1000];
+ * const sink = new SomeSink();
+ * for (const sourceId of sourceIds) {
+ *   const item = await source.read(sourceId);     // takes 300 ms of I/O wait, no CPU
+ *   const outputItem = doSomeOperation(item);     // takes 20 ms of CPU
+ *   await sink.write(outputItem);                 // takes 500 ms of I/O wait, no CPU
+ * }
+ * ```
+ *
+ * Each iteration takes 820ms total, but we waste time waiting for I/O.
+ * We could prefetch the next read (300ms) while processing (20ms) and writing (500ms),
+ * without changing the order of reads or writes.
+ *
+ * Using IterableMapper as a prefetcher:
+ * ```typescript
+ * const source = new SomeSource();
+ * const sourceIds = [1, 2,... 1000];
+ * // Pre-reads up to 8 items serially and releases in sequential order
+ * const sourcePrefetcher = new IterableMapper(sourceIds,
+ *   async (sourceId) => source.read(sourceId),
+ *   { concurrency: 1 }
+ * );
+ * const sink = new SomeSink();
+ * for await (const item of sourcePrefetcher) {
+ *   const outputItem = doSomeOperation(item);     // takes 20 ms of CPU
+ *   await sink.write(outputItem);                 // takes 500 ms of I/O wait, no CPU
+ * }
+ * ```
+ *
+ * This reduces iteration time to 520ms by overlapping reads with processing/writing.
+ *
+ * For maximum throughput, combine with IterableQueueMapperSimple for concurrent writes:
+ * ```typescript
+ * const source = new SomeSource();
+ * const sourceIds = [1, 2,... 1000];
+ * const sourcePrefetcher = new IterableMapper(sourceIds,
+ *   async (sourceId) => source.read(sourceId),
+ *   { concurrency: 1 }
+ * );
+ * const sink = new SomeSink();
+ * const flusher = new IterableQueueMapperSimple(
+ *   async (outputItem) => sink.write(outputItem),
+ *   { concurrency: 10 }
+ * );
+ * for await (const item of sourcePrefetcher) {
+ *   const outputItem = doSomeOperation(item);     // takes 20 ms of CPU
+ *   await flusher.enqueue(outputItem);           // usually takes no time
+ * }
+ * // Wait for all writes to complete
+ * await flusher.onIdle();
+ * // Check for errors
+ * if (flusher.errors.length > 0) {
+ *  // ...
+ * }
+ * ```
+ *
+ * This reduces iteration time to about 20ms by overlapping reads and writes.
  *
  * @category Iterable Input
  */
@@ -93,23 +175,24 @@ export class IterableMapper<Element, NewElement> implements AsyncIterable<NewEle
   /**
    * Create a new `IterableMapper`
    *
-   * @param input Iterated over concurrently in the `mapper` function.
-   * @param mapper Function which is called for every item in `input`.
-   *    Expected to return a `Promise` or value.
-   *
-   *    The `mapper` *should* handle all errors and not allow an error to be thrown
-   *    out of the `mapper` function as this enables the best handling of errors
-   *    closest to the time that they occur.
-   *
-   *    If the `mapper` function does allow an error to be thrown then the
-   *   `stopOnMapperError` option controls the behavior:
-   *      - `stopOnMapperError`: `true` - will throw the error
-   *        out of `next` or the `AsyncIterator` returned from `[Symbol.asyncIterator]`
-   *        and stop processing.
-   *     - `stopOnMapperError`: `false` - will continue processing
-   *        and accumulate the errors to be thrown from `next` or the `AsyncIterator`
-   *        returned from `[Symbol.asyncIterator]` when all items have been processed.
+   * @param input Iterated over concurrently, or serially, in the `mapper` function.
+   * @param mapper Function called for every item in `input`. Returns a `Promise` or value.
    * @param options IterableMapper options
+   *
+   * Error Handling:
+   * The mapper should ideally handle all errors internally to enable error handling
+   * closest to where they occur. However, if errors do escape the mapper:
+   *
+   * When stopOnMapperError is true (default):
+   * - First error immediately stops processing
+   * - Error is thrown from the AsyncIterator's next() call
+   *
+   * When stopOnMapperError is false:
+   * - Processing continues despite errors
+   * - All errors are collected and thrown together
+   * - Errors are thrown as AggregateError after all items complete
+   *
+   * @see {@link IterableQueueMapper} for full class documentation
    */
   constructor(
     input: AsyncIterable<Element> | Iterable<Element>,
@@ -323,7 +406,7 @@ export class IterableMapper<Element, NewElement> implements AsyncIterable<NewEle
   }
 
   /**
-   * Get the next item from the source iterable.
+   * Get the next item from the `input` iterable.
    *
    * @remarks
    *

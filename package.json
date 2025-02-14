@@ -24,7 +24,7 @@
     "AsyncIterator"
   ],
   "scripts": {
-    "build": "tsc --build tsconfig.json && echo 'examples/\n*.tsbuildinfo' > dist/.npmignore",
+    "build": "tsc --build tsconfig.json && echo 'examples/\n*.tsbuildinfo\n*.test.*\n*.d.ts.map' > dist/.npmignore",
     "build:docs": "typedoc src/index.ts",
     "example:iterable-mapper": "ts-node -r tsconfig-paths/register examples/iterable-mapper.ts",
     "example:iterable-queue-mapper": "ts-node -r tsconfig-paths/register examples/iterable-queue-mapper.ts",

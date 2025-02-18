@@ -20,7 +20,17 @@ describe('Queue', () => {
 
   it('enqueue undefined throws', () => {
     const q = new Queue<string | undefined>();
-    expect(() => q.enqueue(undefined)).toThrowError('cannot enqueue `undefined`');
+    let thrown = false;
+    try {
+      q.enqueue(undefined);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } catch (e: any) {
+      // Note: The pattern below worked locally but in CI it reported the throw as uncovered
+      // expect(() => q.enqueue(undefined)).toThrowError('cannot enqueue `undefined`');
+      thrown = true;
+      expect(e.message).toBe('cannot enqueue `undefined`');
+    }
+    expect(thrown).toBe(true);
     expect(q.length).toBe(0);
   });
 

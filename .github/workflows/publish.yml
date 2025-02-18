@@ -5,23 +5,27 @@ on:
     types: [published]
 
 jobs:
+  install-deps:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/configure-nodejs
+        with:
+          lookup-only: 'true' # We only want to lookup from the cache - if a hit, this job does nothing
+
   build:
+    needs:
+      - install-deps
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Use Node.js 16
-        uses: actions/setup-node@v3
-        with:
-          node-version: 16
+      - uses: ./.github/actions/configure-nodejs
 
       - name: Use the Release Tag Version
         run: |
           npm version from-git --allow-same-version --no-git-tag-version
-
-      - name: Install Modules
-        run: npm ci
 
       - name: Build
         run: npm run build

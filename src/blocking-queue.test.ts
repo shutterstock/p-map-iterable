@@ -42,8 +42,12 @@ describe('BlockingQueue', () => {
         // Not adding more items
         queue.done();
       }, 1);
+      expect(queue.length).toBeGreaterThanOrEqual(0);
+      expect(queue.length).toBeLessThanOrEqual(1);
       const item = await queue.dequeue();
+      expect(queue.length).toBeLessThanOrEqual(1);
       const item2 = await queue.dequeue();
+      expect(queue.length).toBeLessThanOrEqual(0);
       expect(item).toBe(1);
       expect(item2).toBe(2);
     });

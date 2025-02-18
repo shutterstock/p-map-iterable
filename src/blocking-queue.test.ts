@@ -10,6 +10,18 @@ describe('BlockingQueue', () => {
     jest.clearAllMocks();
   });
 
+  describe('constructor', () => {
+    test('should throw TypeError if maxUnread is not a valid integer or Infinity', () => {
+      expect(() => {
+        new BlockingQueue({ maxUnread: -1 });
+      }).toThrow(TypeError);
+
+      expect(() => {
+        new BlockingQueue({ maxUnread: 1.5 });
+      }).toThrow(TypeError);
+    });
+  });
+
   describe('maxUnread: 0', () => {
     it('single item enqueue/dequeue works', async () => {
       const queue = new BlockingQueue<number>({ maxUnread: 0 });

@@ -78,7 +78,7 @@ describe('BlockingQueue', () => {
       expect(await queue.dequeue()).toBe(1);
       expect(Date.now() - startTime).toBeLessThan(2000);
       expect(await queue.dequeue()).toBe(2);
-      expect(Math.ceil(Date.now() - startTime)).toBeGreaterThanOrEqual(2000);
+      expect(Math.ceil(Math.ceil(Date.now() - startTime))).toBeGreaterThanOrEqual(2000);
 
       queue.done();
     });

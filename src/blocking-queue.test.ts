@@ -33,6 +33,21 @@ describe('BlockingQueue', () => {
       expect(item).toBe(1);
     });
 
+    it('multiple enqueues finish after done', async () => {
+      const queue = new BlockingQueue<number>({ maxUnread: 0 });
+      setTimeout(() => {
+        // Not waiting for these to complete
+        void queue.enqueue(1);
+        void queue.enqueue(2);
+        // Not adding more items
+        queue.done();
+      }, 1);
+      const item = await queue.dequeue();
+      const item2 = await queue.dequeue();
+      expect(item).toBe(1);
+      expect(item2).toBe(2);
+    });
+
     it('dequeue after done does not hang', async () => {
       const queue = new BlockingQueue<number>({ maxUnread: 0 });
       setTimeout(() => {

@@ -70,6 +70,54 @@ describe('IterableMapper', () => {
     jest.clearAllMocks();
   });
 
+  describe('constructor', () => {
+    const validInput = [1, 2, 3];
+    const validMapper = async (x: number) => {
+      await sleep(1);
+      return x * 2;
+    };
+
+    test('should throw TypeError if mapper is not a function', () => {
+      expect(() => {
+        new IterableMapper(validInput, null as any);
+      }).toThrow(TypeError);
+    });
+
+    test('should throw TypeError if concurrency is not a valid integer or Infinity', () => {
+      expect(() => {
+        new IterableMapper(validInput, validMapper, { concurrency: 0 });
+      }).toThrow(TypeError);
+
+      expect(() => {
+        new IterableMapper(validInput, validMapper, { concurrency: -1 });
+      }).toThrow(TypeError);
+
+      expect(() => {
+        new IterableMapper(validInput, validMapper, { concurrency: 1.5 });
+      }).toThrow(TypeError);
+    });
+
+    test('should throw TypeError if maxUnread is not a valid integer or Infinity', () => {
+      expect(() => {
+        new IterableMapper(validInput, validMapper, { maxUnread: 0 });
+      }).toThrow(TypeError);
+
+      expect(() => {
+        new IterableMapper(validInput, validMapper, { maxUnread: -1 });
+      }).toThrow(TypeError);
+
+      expect(() => {
+        new IterableMapper(validInput, validMapper, { maxUnread: 1.5 });
+      }).toThrow(TypeError);
+    });
+
+    test('should throw TypeError if maxUnread is less than concurrency', () => {
+      expect(() => {
+        new IterableMapper(validInput, validMapper, { concurrency: 5, maxUnread: 4 });
+      }).toThrow(TypeError);
+    });
+  });
+
   describe('simple tests', () => {
     it('simple mapper works - sync mapper', async () => {
       const max = 100;

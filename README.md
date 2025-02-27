@@ -123,10 +123,17 @@ The package is available on npm as [@shutterstock/p-map-iterable](https://www.np
 ## Importing
 
 ```typescript
+// Original class names
 import {
   IterableMapper,
   IterableQueueMapper,
   IterableQueueMapperSimple } from '@shutterstock/p-map-iterable';
+
+// Or use the semantic aliases (recommended for new code)
+import {
+  Prefetcher,
+  BackgroundFlusher,
+  SimpleBackgroundFlusher } from '@shutterstock/p-map-iterable';
 ```
 
 ## API Documentation
@@ -151,21 +158,23 @@ These diagrams illustrate the differences in operation betweeen `p-map`, `p-queu
 
 # Features
 
-- [IterableMapper](https://tech.shutterstock.com/p-map-iterable/classes/IterableMapper.html)
+- [Prefetcher (IterableMapper)](https://tech.shutterstock.com/p-map-iterable/classes/IterableMapper.html)
   - Interface and concept based on: [p-map](https://github.com/sindresorhus/p-map)
   - Allows a sync or async iterable input
   - User supplied sync or async mapper function
   - Exposes an async iterable interface for consuming mapped items
   - Allows a maximum queue depth of mapped items - if the consumer stops consuming, the queue will fill up, at which point the mapper will stop being invoked until an item is consumed from the queue
   - This allows mapping with backpressure so that the mapper does not consume unlimited resources (e.g. memory, disk, network, event loop time) by racing ahead of the consumer
-- [IterableQueueMapper](https://tech.shutterstock.com/p-map-iterable/classes/IterableQueueMapper.html)
+  - Also available as `IterableMapper`
+- [BackgroundFlusher (IterableQueueMapper)](https://tech.shutterstock.com/p-map-iterable/classes/IterableQueueMapper.html)
   - Wraps `IterableMapper`
   - Adds items to the queue via the `enqueue` method
-- [IterableQueueMapperSimple](https://tech.shutterstock.com/p-map-iterable/classes/IterableQueueMapperSimple.html)
+  - Also available as `IterableQueueMapper`
+- [SimpleBackgroundFlusher (IterableQueueMapperSimple)](https://tech.shutterstock.com/p-map-iterable/classes/IterableQueueMapperSimple.html)
   - Wraps `IterableQueueMapper`
   - Discards results as they become available
   - Exposes any accumulated errors through the `errors` property instead of throwing an `AggregateError`
-  - Not actually `Iterable` - May rename this before 1.0.0
+  - Also available as `IterableQueueMapperSimple`
 
 ## Lower Level Utilities
 - [IterableQueue](https://tech.shutterstock.com/p-map-iterable/classes/IterableQueue.html)
@@ -203,6 +212,20 @@ Run the example with `npm run example:iterable-queue-mapper`
 See [examples/iterable-queue-mapper-simple.ts](./examples/iterable-queue-mapper-simple.ts) for an example.
 
 Run the example with `npm run example:iterable-queue-mapper-simple`
+
+# Semantic Aliases (Prefetcher, BackgroundFlusher, SimpleBackgroundFlusher)
+
+The library now provides semantic aliases for the main classes to better describe their typical use cases:
+
+- `Prefetcher` - Alias for `IterableMapper`: Processes items from an iterable source in the background before they're needed
+- `BackgroundFlusher` - Alias for `IterableQueueMapper`: Processes items in the background with results accessible via iteration
+- `SimpleBackgroundFlusher` - Alias for `IterableQueueMapperSimple`: Processes items in the background, automatically discarding results
+
+These aliases make the code more intuitive and descriptive of the actual data flow patterns being implemented.
+
+See [examples/semantic-aliases.ts](./examples/semantic-aliases.ts) for examples of using these aliases.
+
+Run the example with `npm run example:semantic-aliases`
 
 # Contributing - Setting up Build Environment
 

@@ -200,9 +200,32 @@ Run the example with `npm run example:iterable-queue-mapper`
 
 `IterableQueueMapperSimple` is similar to `IterableQueueMapper` but instead exposing the results as an iterable it discards the results as soon as they are ready and exposes any errors through the `errors` property.
 
-See [examples/iterable-queue-mapper-simple.ts](./examples/iterable-queue-mapper-simple.ts) for an example.
+## Queue Depth Control
 
-Run the example with `npm run example:iterable-queue-mapper-simple`
+The `IterableQueueMapperSimple` supports a `maxQueueDepth` option that controls how many items can be queued before blocking, independently from the `concurrency` setting.
+
+This is particularly useful for FIFO sequential processing scenarios where you want to:
+1. Process items one at a time in order (concurrency: 1)
+2. Allow multiple items to be queued up (maxQueueDepth: N)
+
+Example configuration for ordered database writes with a queue of 8 items:
+
+```typescript
+const dbFlusher = new IterableQueueMapperSimple(writeToDatabase, { 
+  concurrency: 1,     // Process one at a time (sequential FIFO order)
+  maxQueueDepth: 8    // Allow up to 8 items to be queued
+});
+```
+
+This allows your application to queue up to 8 items for sequential processing, which can significantly improve throughput in scenarios where item generation is bursty but processing must be sequential.
+
+See [examples/iterable-queue-mapper-simple.ts](./examples/iterable-queue-mapper-simple.ts) for basic usage and [examples/queue-depth-control.ts](./examples/queue-depth-control.ts) for queue depth control examples.
+
+Run the examples with:
+```
+npm run example:iterable-queue-mapper-simple
+npm run example:queue-depth-control
+```
 
 # Contributing - Setting up Build Environment
 

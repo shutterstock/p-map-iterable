@@ -1,4 +1,3 @@
-import { IterableMapperOptions, Mapper } from './iterable-mapper';
 import { IterableQueueMapper } from './iterable-queue-mapper';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -9,7 +8,31 @@ const NoResult = Symbol('noresult');
 /**
  * Options for IterableQueueMapperSimple
  */
-export type IterableQueueMapperSimpleOptions = Pick<IterableMapperOptions, 'concurrency'>;
+export interface IterableQueueMapperSimpleOptions {
+  /**
+   * Maximum number of concurrent invocations of `mapper` to run at once.
+   *
+   * Must be an integer from 1 and up or `Infinity`.
+   *
+   * @default 4
+   */
+  readonly concurrency?: number;
+
+  /**
+   * Maximum number of items that can be queued before blocking.
+   * This allows control over how many items can be added to the queue
+   * while waiting for processing, independently of concurrency.
+   *
+   * For example, with concurrency=1 and maxQueueDepth=8, it will:
+   * - Process one item at a time in FIFO order
+   * - Allow up to 8 items to be queued before blocking on enqueue()
+   *
+   * Must be an integer from 1 and up or `Infinity`, and should be >= `concurrency`.
+   *
+   * @default Same as concurrency
+   */
+  readonly maxQueueDepth?: number;
+}
 
 /**
  * Accepts queue items via `enqueue` and calls the `mapper` on them
@@ -25,6 +48,11 @@ export type IterableQueueMapperSimpleOptions = Pick<IterableMapperOptions, 'conc
  * - In the simple sequential (`concurrency: 1`) case, allows 1 item to be flushed async while caller prepares next item
  * - Results of the flushed items are not needed in a subsequent step (if they are, use `IterableQueueMapper`)
  *
+ * ### Queue Management
+ * - Use `concurrency: 1` for sequential processing (e.g., for DB writes that must be in order)
+ * - Use `maxQueueDepth` to control how many items can be queued up before blocking
+ * - For example, `{ concurrency: 1, maxQueueDepth: 8 }` allows 8 items to be queued while processing 1 at a time
+ *
  * ### Error Handling
  *   The mapper should ideally handle all errors internally to enable error handling
  *   closest to where they occur. However, if errors do escape the mapper:
@@ -33,7 +61,7 @@ export type IterableQueueMapperSimpleOptions = Pick<IterableMapperOptions, 'conc
  *   - Errors can be checked/handled during processing via the `errors` property
  *
  *   Key Differences from `IterableQueueMapper`:
- *   - `maxUnread` defaults to equal `concurrency` (simplifying queue management)
+ *   - `maxQueueDepth` controls how many items can be queued before blocking (defaults to equal `concurrency`)
  *   - Results are automatically iterated and discarded (all work should happen in mapper)
  *   - Errors are collected rather than thrown (available via errors property)
  *
@@ -70,11 +98,17 @@ export class IterableQueueMapperSimple<Element> {
    * @see {@link IterableMapper} for underlying mapper implementation and examples of combined usage
    */
   constructor(mapper: Mapper<Element, void>, options: IterableQueueMapperSimpleOptions = {}) {
-    const { concurrency = 4 } = options;
+    const { concurrency = 4, maxQueueDepth } = options;
+
+    // If maxQueueDepth is not specified, default to concurrency (maintaining backward compatibility)
+    const effectiveMaxUnread = maxQueueDepth !== undefined ? maxQueueDepth : concurrency;
 
     this._mapper = mapper;
     this.worker = this.worker.bind(this);
-    this._writer = new IterableQueueMapper(this.worker, { concurrency, maxUnread: concurrency });
+    this._writer = new IterableQueueMapper(this.worker, {
+      concurrency,
+      maxUnread: effectiveMaxUnread,
+    });
 
     // Discard all of the results
     this._done = this.discardResults();

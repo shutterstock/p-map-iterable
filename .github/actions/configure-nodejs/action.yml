@@ -8,10 +8,17 @@ inputs:
   lookup-only:
     description: 'If true, only checks if cache entry exists and skips download. Does not change save cache behavior'
     default: 'false'
+  registry-url:
+    description: 'Optional npm registry for token authentication via NODE_AUTH_TOKEN'
+    default: ''
 
 runs:
   using: 'composite'
   steps:
+    - name: Preserve the npm interoperability release-age policy
+      shell: bash
+      run: echo 'npm_config_min_release_age=7' >> "$GITHUB_ENV"
+
     - uses: pwrdrvr/configure-nodejs@f51ed2be76fbdf3e3374478ef5cd59a7687434ec # v1.5.0
       env:
         # pnpm 12 uses PNPM_CONFIG_*; the official action sets the older npm_config_*.
@@ -20,3 +27,11 @@ runs:
         node-version: ${{ inputs.node-version }}
         package-manager: pnpm
         lookup-only: ${{ inputs.lookup-only }}
+
+    - name: Configure publication registry when requested
+      if: inputs.registry-url != ''
+      uses: actions/setup-node@v7
+      with:
+        node-version: ${{ inputs.node-version }}
+        registry-url: ${{ inputs.registry-url }}
+        package-manager-cache: false

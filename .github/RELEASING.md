@@ -34,8 +34,12 @@ Dependabot entries when that branch is cut.
 1. Merge and validate the intended release commit on `main` or its maintenance
    branch. Builds, dependency installation, documentation, and publishing use
    Node 24 with npm 11.19.1 and `min-release-age=7`, matching the local policy.
-   An additional CI lane installs and builds on Node 24, then runs tests
-   on Node 22.13 while retaining npm 11.19.1 and the same release-age policy.
+   An additional CI lane installs and builds on Node 24, then invokes Jest
+   explicitly with Node 22.0.0. It restores the Node 24 toolchain for npm work,
+   retaining npm 11.19.1 and the same release-age policy. Package consumers use
+   the captured Node 22 binary through `PACKAGE_TEST_NODE`, while their installs,
+   prepack builds, and compilation continue on Node 24. This lane covers the
+   planned 2.x `>=22` runtime floor; 1.x compatibility remains unchanged.
    Both CI lanes and publication run `test:package` when that script
    exists, including the planned 2.x package consumer fixtures.
 2. Create a new tag named `release/vX.Y.Z`, or `release/vX.Y.Z-beta.1` for a
@@ -135,7 +139,7 @@ Required settings are managed by the repository owner:
 The workflows use maintained major refs for checkout v7, setup-node v7, cache v6,
 upload-artifact v7, find-comment v4, create-or-update-comment v5, and gh-pages v4.
 Their current releases all run on Node 24 inside the Actions runner; this is
-independent of the Node 22.13 package runtime test lane. The verified
+independent of the Node 22.0 package runtime test lane. The verified
 `ubuntu-latest` CI run used Actions runner 2.337.0, satisfying the documented
 [Node 24 minimum of 2.327.1](https://github.com/actions/setup-node/tree/v7#breaking-changes-in-v5)
 and checkout's 2.329.0 requirement for authenticated Git commands in Docker

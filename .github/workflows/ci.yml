@@ -83,7 +83,7 @@ jobs:
           title: Node.js Code Coverage Report
 
   runtime-tests:
-    name: Runtime tests (Node 22.13)
+    name: Runtime tests (Node 22.0)
     needs: install-deps
     runs-on: ubuntu-latest
     steps:
@@ -94,31 +94,50 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Preserve configured npm for the older runtime
-        id: runtime-npm
+      - name: Preserve the Node 24 toolchain
+        id: toolchain
         run: |
-          mkdir -p "$RUNNER_TEMP/runtime-npm"
-          ln -s "$(command -v npm)" "$RUNNER_TEMP/runtime-npm/npm"
-          ln -s "$(command -v npx)" "$RUNNER_TEMP/runtime-npm/npx"
-          echo "version=$(npm --version)" >> "$GITHUB_OUTPUT"
+          {
+            echo "node=$(command -v node)"
+            echo "npm=$(command -v npm)"
+            echo "path=$PATH"
+            echo "npm-version=$(npm --version)"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Select older runtime after installing and building on Node 24
         uses: actions/setup-node@v7
         with:
-          node-version: '22.13.0'
+          node-version: '22.0.0'
           package-manager-cache: false
 
-      - name: Retain npm version and release-age policy with the older runtime
+      - name: Capture the runtime and restore the Node 24 toolchain
+        id: runtime
         env:
-          EXPECTED_NPM_VERSION: ${{ steps.runtime-npm.outputs.version }}
+          TOOLCHAIN_NODE: ${{ steps.toolchain.outputs.node }}
+          TOOLCHAIN_NPM: ${{ steps.toolchain.outputs.npm }}
+          TOOLCHAIN_PATH: ${{ steps.toolchain.outputs.path }}
+          EXPECTED_NPM_VERSION: ${{ steps.toolchain.outputs.npm-version }}
         run: |
-          echo "$RUNNER_TEMP/runtime-npm" >> "$GITHUB_PATH"
-          export PATH="$RUNNER_TEMP/runtime-npm:$PATH"
+          runtime_node=$(command -v node)
+          test "$("$runtime_node" --version)" = 'v22.0.0'
+          echo "node=$runtime_node" >> "$GITHUB_OUTPUT"
+          dirname "$TOOLCHAIN_NPM" >> "$GITHUB_PATH"
+          dirname "$TOOLCHAIN_NODE" >> "$GITHUB_PATH"
+          export PATH="$TOOLCHAIN_PATH"
+          test "$(command -v node)" = "$TOOLCHAIN_NODE"
+          test "$(command -v npm)" = "$TOOLCHAIN_NPM"
+          test "$(node -p 'process.versions.node.split(".")[0]')" = '24'
           test "$(npm --version)" = "$EXPECTED_NPM_VERSION"
           test "$(npm config get min-release-age)" = '7'
 
-      - name: Test
-        run: npm run test
+      - name: Test on the Node 22.0 runtime
+        env:
+          PATH: ${{ steps.toolchain.outputs.path }}
+          RUNTIME_NODE: ${{ steps.runtime.outputs.node }}
+        run: '"$RUNTIME_NODE" node_modules/jest/bin/jest.js'
 
       - name: Test package consumers when available
+        env:
+          PATH: ${{ steps.toolchain.outputs.path }}
+          PACKAGE_TEST_NODE: ${{ steps.runtime.outputs.node }}
         run: npm run test:package --if-present

@@ -4,9 +4,21 @@ on:
   push:
     branches:
       - main
+      - 'releases/**'
   pull_request:
     branches:
       - main
+      - 'releases/**'
+
+permissions:
+  contents: read
+
+env:
+  npm_config_min_release_age: '7'
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   check-access:
@@ -15,39 +27,103 @@ jobs:
       has-token-access: ${{ steps.check.outputs.has-token-access }}
     steps:
       - id: check
+        env:
+          PR_IS_FORK: ${{ github.event.pull_request.head.repo.fork }}
+          ACTOR: ${{ github.actor }}
         run: |
-          echo "has-token-access=$(if [[ '${{ github.event.pull_request.head.repo.fork }}' != 'true' && '${{ github.actor }}' != 'dependabot[bot]' ]]; then echo 'true'; else echo 'false'; fi)" >> "$GITHUB_OUTPUT"
+          if [[ "$PR_IS_FORK" != 'true' && "$ACTOR" != 'dependabot[bot]' ]]; then
+            echo 'has-token-access=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'has-token-access=false' >> "$GITHUB_OUTPUT"
+          fi
 
   install-deps:
     runs-on: ubuntu-latest
+    outputs:
+      cache-key: ${{ steps.configure-nodejs.outputs.cache-key }}
     steps:
       - uses: actions/checkout@v7
-      - uses: ./.github/actions/configure-nodejs
         with:
-          lookup-only: 'true' # We only want to lookup from the cache - if a hit, this job does nothing
+          ref: ${{ github.sha }}
+
+      - name: Populate completed dependencies
+        id: configure-nodejs
+        uses: pwrdrvr/configure-nodejs@8876dbf3c524c8a765543dae3ae5b55d7b5ecfb3 # v1.6.0
+        with:
+          node-version: '^24.0.0'
+          package-manager: pnpm
+          working-directory: '.'
+          dependency-cache: node-modules
+          cache-mode: populate
+          cache-key-suffix: p-map-iterable-8876dbf3c524c8a765543dae3ae5b55d7b5ecfb3-${{ hashFiles('package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', '.npmrc') }}
 
   build:
+    # A failed dependency must fail the required build check, not skip it.
+    if: always()
     needs:
       - install-deps
       - check-access
+      - runtime-tests
     runs-on: ubuntu-latest
+    env:
+      PNPM_CONFIG_VERIFY_DEPS_BEFORE_RUN: 'false'
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
     steps:
+      - name: Require dependency setup and runtime tests to succeed
+        env:
+          INSTALL_RESULT: ${{ needs.install-deps.result }}
+          RUNTIME_RESULT: ${{ needs.runtime-tests.result }}
+          ACCESS_RESULT: ${{ needs.check-access.result }}
+        run: |
+          test "$INSTALL_RESULT" = 'success'
+          test "$RUNTIME_RESULT" = 'success'
+          test "$ACCESS_RESULT" = 'success'
+
       - name: Checkout code
         uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
 
-      - uses: ./.github/actions/configure-nodejs
+      - name: Restore completed dependencies
+        id: configure-nodejs
+        uses: pwrdrvr/configure-nodejs@8876dbf3c524c8a765543dae3ae5b55d7b5ecfb3 # v1.6.0
+        with:
+          node-version: '^24.0.0'
+          package-manager: pnpm
+          working-directory: '.'
+          dependency-cache: node-modules
+          cache-mode: restore
+          cache-key-suffix: p-map-iterable-8876dbf3c524c8a765543dae3ae5b55d7b5ecfb3-${{ hashFiles('package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', '.npmrc') }}
+
+      - name: Require completed cache key to match the producer
+        env:
+          PRODUCER_CACHE_KEY: ${{ needs.install-deps.outputs.cache-key }}
+          CONSUMER_CACHE_KEY: ${{ steps.configure-nodejs.outputs.cache-key }}
+        run: |
+          test -n "$PRODUCER_CACHE_KEY"
+          test "$CONSUMER_CACHE_KEY" = "$PRODUCER_CACHE_KEY"
+          printf 'Completed dependency cache key: %s\n' "$CONSUMER_CACHE_KEY"
+
+      - name: Test release metadata
+        run: node --test .github/scripts/release-metadata.test.cjs .github/scripts/docs-deployment.test.cjs
 
       - name: Build
-        run: npm run build
+        run: pnpm run build
 
       - name: Build Docs
-        run: npm run build:docs
+        run: pnpm run build:docs
 
       - name: Lint
-        run: npm run lint
+        run: pnpm run lint
 
       - name: Test
-        run: npm run test
+        run: pnpm run test
+
+      - name: Test package consumers when available
+        run: pnpm run --if-present test:package
 
       - name: Upload code coverage
         if: github.event_name == 'pull_request' && needs.check-access.outputs.has-token-access == 'true'
@@ -55,3 +131,94 @@ jobs:
         with:
           lcov-file: coverage/lcov.info
           title: Node.js Code Coverage Report
+
+  runtime-tests:
+    name: Runtime tests (Node 22)
+    needs: install-deps
+    runs-on: ubuntu-latest
+    env:
+      PNPM_CONFIG_VERIFY_DEPS_BEFORE_RUN: 'false'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Restore completed dependencies
+        id: configure-nodejs
+        uses: pwrdrvr/configure-nodejs@8876dbf3c524c8a765543dae3ae5b55d7b5ecfb3 # v1.6.0
+        with:
+          node-version: '^24.0.0'
+          package-manager: pnpm
+          working-directory: '.'
+          dependency-cache: node-modules
+          cache-mode: restore
+          cache-key-suffix: p-map-iterable-8876dbf3c524c8a765543dae3ae5b55d7b5ecfb3-${{ hashFiles('package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', '.npmrc') }}
+
+      - name: Require completed cache key to match the producer
+        env:
+          PRODUCER_CACHE_KEY: ${{ needs.install-deps.outputs.cache-key }}
+          CONSUMER_CACHE_KEY: ${{ steps.configure-nodejs.outputs.cache-key }}
+        run: |
+          test -n "$PRODUCER_CACHE_KEY"
+          test "$CONSUMER_CACHE_KEY" = "$PRODUCER_CACHE_KEY"
+          printf 'Completed dependency cache key: %s\n' "$CONSUMER_CACHE_KEY"
+
+      - name: Build
+        run: pnpm run build
+
+      - name: Preserve the Node 24 toolchain
+        id: toolchain
+        run: |
+          {
+            echo "node=$(command -v node)"
+            echo "npm=$(command -v npm)"
+            echo "pnpm=$(command -v pnpm)"
+            echo "path=$PATH"
+            echo "pnpm-version=$(pnpm --version)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Select older runtime after installing and building on Node 24
+        uses: actions/setup-node@v7
+        with:
+          node-version: '^22.0.0'
+          check-latest: false
+          package-manager-cache: false
+
+      - name: Capture the runtime and restore the Node 24 toolchain
+        id: runtime
+        env:
+          TOOLCHAIN_NODE: ${{ steps.toolchain.outputs.node }}
+          TOOLCHAIN_NPM: ${{ steps.toolchain.outputs.npm }}
+          TOOLCHAIN_PNPM: ${{ steps.toolchain.outputs.pnpm }}
+          TOOLCHAIN_PATH: ${{ steps.toolchain.outputs.path }}
+          EXPECTED_PNPM_VERSION: ${{ steps.toolchain.outputs.pnpm-version }}
+        run: |
+          runtime_node=$(command -v node)
+          test "$("$runtime_node" -p 'process.versions.node.split(".")[0]')" = '22'
+          echo "node=$runtime_node" >> "$GITHUB_OUTPUT"
+          echo "Selected Node 22 runtime: $("$runtime_node" --version)"
+          {
+            dirname "$TOOLCHAIN_NPM"
+            dirname "$TOOLCHAIN_PNPM"
+            dirname "$TOOLCHAIN_NODE"
+          } >> "$GITHUB_PATH"
+          export PATH="$TOOLCHAIN_PATH"
+          test "$(command -v node)" = "$TOOLCHAIN_NODE"
+          test "$(command -v npm)" = "$TOOLCHAIN_NPM"
+          test "$(command -v pnpm)" = "$TOOLCHAIN_PNPM"
+          test "$(node -p 'process.versions.node.split(".")[0]')" = '24'
+          test "$(pnpm --version)" = "$EXPECTED_PNPM_VERSION"
+          test "$(pnpm config get minimumReleaseAge)" = '10080'
+          test "$(npm config get min-release-age)" = '7'
+
+      - name: Test on the Node 22 runtime
+        env:
+          PATH: ${{ steps.toolchain.outputs.path }}
+          RUNTIME_NODE: ${{ steps.runtime.outputs.node }}
+        run: '"$RUNTIME_NODE" node_modules/jest/bin/jest.js'
+
+      - name: Test package consumers when available
+        env:
+          PATH: ${{ steps.toolchain.outputs.path }}
+          PACKAGE_TEST_NODE: ${{ steps.runtime.outputs.node }}
+        run: pnpm run --if-present test:package

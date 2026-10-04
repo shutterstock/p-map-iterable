@@ -1,34 +1,87 @@
 name: Publish Docs
 
 on:
-  release:
-    types: [published]
-
   workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  npm_config_min_release_age: '7'
+
+concurrency:
+  # Release docs run after npm succeeds in publish.yml, under this same lock.
+  group: npm-publication
+  queue: max
+  cancel-in-progress: false
 
 jobs:
   install-deps:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    outputs:
+      cache-key: ${{ steps.configure-nodejs.outputs.cache-key }}
     steps:
       - uses: actions/checkout@v7
-      - uses: ./.github/actions/configure-nodejs
         with:
-          lookup-only: 'true' # We only want to lookup from the cache - if a hit, this job does nothing
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Populate completed dependencies
+        id: configure-nodejs
+        uses: pwrdrvr/configure-nodejs@8876dbf3c524c8a765543dae3ae5b55d7b5ecfb3 # v1.6.0
+        with:
+          node-version: '^24.0.0'
+          package-manager: pnpm
+          working-directory: '.'
+          dependency-cache: node-modules
+          cache-mode: populate
+          cache-key-suffix: p-map-iterable-8876dbf3c524c8a765543dae3ae5b55d7b5ecfb3-${{ hashFiles('package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', '.npmrc') }}
 
   build:
-    needs:
-      - install-deps
+    needs: install-deps
     runs-on: ubuntu-latest
+    env:
+      PNPM_CONFIG_VERIFY_DEPS_BEFORE_RUN: 'false'
+    permissions:
+      contents: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
 
-      - uses: ./.github/actions/configure-nodejs
+      - name: Restore completed dependencies
+        id: configure-nodejs
+        uses: pwrdrvr/configure-nodejs@8876dbf3c524c8a765543dae3ae5b55d7b5ecfb3 # v1.6.0
+        with:
+          node-version: '^24.0.0'
+          package-manager: pnpm
+          working-directory: '.'
+          dependency-cache: node-modules
+          cache-mode: restore
+          cache-key-suffix: p-map-iterable-8876dbf3c524c8a765543dae3ae5b55d7b5ecfb3-${{ hashFiles('package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', '.npmrc') }}
+
+      - name: Require completed cache key to match the producer
+        env:
+          PRODUCER_CACHE_KEY: ${{ needs.install-deps.outputs.cache-key }}
+          CONSUMER_CACHE_KEY: ${{ steps.configure-nodejs.outputs.cache-key }}
+        run: |
+          test -n "$PRODUCER_CACHE_KEY"
+          test "$CONSUMER_CACHE_KEY" = "$PRODUCER_CACHE_KEY"
+          printf 'Completed dependency cache key: %s\n' "$CONSUMER_CACHE_KEY"
 
       - name: Build Docs
-        run: npm run build:docs
+        run: pnpm run build:docs
+
+      - name: Recheck main and npm latest provenance before deployment
+        id: deployment
+        run: node .github/scripts/docs-deployment.cjs
 
       - name: Deploy to GitHub Pages
+        if: steps.deployment.outputs.publish == 'true'
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}

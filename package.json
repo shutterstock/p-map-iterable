@@ -29,6 +29,7 @@
     "example:iterable-mapper": "ts-node -r tsconfig-paths/register examples/iterable-mapper.ts",
     "example:iterable-queue-mapper": "ts-node -r tsconfig-paths/register examples/iterable-queue-mapper.ts",
     "example:iterable-queue-mapper-simple": "ts-node -r tsconfig-paths/register examples/iterable-queue-mapper-simple.ts",
+    "example:semantic-aliases": "ts-node -r tsconfig-paths/register examples/semantic-aliases.ts",
     "test": "jest",
     "lint": "eslint .",
     "lint-and-fix": "eslint . --fix"

@@ -204,6 +204,32 @@ See [examples/iterable-queue-mapper-simple.ts](./examples/iterable-queue-mapper-
 
 Run the example with `npm run example:iterable-queue-mapper-simple`
 
+## Optional names for I/O pipelines
+
+For code that prefetches reads or sends writes to a sink, the package also exports these class aliases:
+
+| Alias | Original class | How work completes |
+| --- | --- | --- |
+| `Prefetcher` | `IterableMapper` | Consume mapped results with `for await`. Mapping pauses when the unread result buffer fills. |
+| `BackgroundFlusher` | `IterableQueueMapper` | Enqueue inputs while consuming results concurrently. Call `done()` when production ends, then finish consuming the iterator. |
+| `SimpleBackgroundFlusher` | `IterableQueueMapperSimple` | Results are consumed automatically. Await `onIdle()` after the last enqueue and check `errors`. |
+
+```typescript
+import {
+  Prefetcher,
+  BackgroundFlusher,
+  SimpleBackgroundFlusher,
+} from '@shutterstock/p-map-iterable';
+```
+
+The aliases are the original classes, with the same constructor identity and generic instance types. Use the original mapper names for other mapping workloads or the aliases when those I/O roles make the code easier to read. The corresponding option types are `PrefetcherOptions`, `BackgroundFlusherOptions`, and `SimpleBackgroundFlusherOptions`.
+
+`BackgroundFlusher` must have a result consumer even when you do not need the results. Awaiting every enqueue before starting iteration can block once the result buffer fills. Use `SimpleBackgroundFlusher` when results can be discarded. Its `onIdle()` permanently ends input; it is a final shutdown operation, and subsequent enqueues reject. Always await enqueues for producer backpressure and inspect `errors` after shutdown.
+
+The aliases do not supply a write operation: the mapper performs each read or write. They are suited to batch pipelines with an awaited producer; they do not add bounded admission for unawaited event callbacks, per-item completion handles, or reusable idle waits.
+
+See [examples/semantic-aliases.ts](./examples/semantic-aliases.ts) for a prefetcher, a flusher with a concurrent result consumer, and a flusher that collects errors. Run it with `npm run example:semantic-aliases`.
+
 # Contributing - Setting up Build Environment
 
 - `nvm use`

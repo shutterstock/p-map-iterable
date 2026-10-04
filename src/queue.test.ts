@@ -20,7 +20,7 @@ describe('Queue', () => {
 
   it('enqueue undefined throws', () => {
     const q = new Queue<string | undefined>();
-    expect(() => q.enqueue(undefined)).toThrowError('cannot enqueue `undefined`');
+    expect(() => q.enqueue(undefined)).toThrow('cannot enqueue `undefined`');
     expect(q.length).toBe(0);
   });
 
@@ -42,7 +42,7 @@ describe('Queue', () => {
 
     const inputCount = input.length;
     let loopCount = 0;
-    // eslint-disable-next-line no-constant-condition
+
     while (true) {
       const item = q.dequeue();
 

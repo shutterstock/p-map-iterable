@@ -1,8 +1,8 @@
 //
 // 2021-08-25 - Initially based on: https://raw.githubusercontent.com/sindresorhus/p-map/main/index.js
 //
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const AggregateError = require('aggregate-error');
+
+import AggregateError from 'aggregate-error';
 import { IterableQueue } from './iterable-queue';
 
 /**
@@ -278,26 +278,22 @@ export class IterableMapper<Element, NewElement> implements AsyncIterable<NewEle
     }
 
     // Validate concurrency option
-    if (
-      !(
-        (Number.isSafeInteger(this._options.concurrency) ||
-          this._options.concurrency === Number.POSITIVE_INFINITY) &&
-        this._options.concurrency >= 1
-      )
-    ) {
+    if (!(
+      (Number.isSafeInteger(this._options.concurrency) ||
+        this._options.concurrency === Number.POSITIVE_INFINITY) &&
+      this._options.concurrency >= 1
+    )) {
       throw new TypeError(
         `Expected \`concurrency\` to be an integer from 1 and up or \`Infinity\`, got \`${concurrency}\` (${typeof concurrency})`,
       );
     }
 
     // Validate maxUnread option
-    if (
-      !(
-        (Number.isSafeInteger(this._options.maxUnread) ||
-          this._options.maxUnread === Number.POSITIVE_INFINITY) &&
-        this._options.maxUnread >= 1
-      )
-    ) {
+    if (!(
+      (Number.isSafeInteger(this._options.maxUnread) ||
+        this._options.maxUnread === Number.POSITIVE_INFINITY) &&
+      this._options.maxUnread >= 1
+    )) {
       throw new TypeError(
         `Expected \`maxUnread\` to be an integer from 1 and up or \`Infinity\`, got \`${maxUnread}\` (${typeof maxUnread})`,
       );

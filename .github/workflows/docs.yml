@@ -3,25 +3,45 @@ name: Publish Docs
 on:
   release:
     types: [published]
-
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
 jobs:
-  install-deps:
+  select-release:
+    if: github.event_name == 'release' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    outputs:
+      publish: ${{ github.event_name == 'workflow_dispatch' || steps.release.outputs.npm-tag == 'latest' }}
     steps:
       - uses: actions/checkout@v4
-      - uses: ./.github/actions/configure-nodejs
         with:
-          lookup-only: 'true' # We only want to lookup from the cache - if a hit, this job does nothing
+          ref: ${{ github.event.release.tag_name || github.ref }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check release metadata and select docs channel
+        if: github.event_name == 'release'
+        id: release
+        uses: ./.github/actions/release-metadata
 
   build:
-    needs:
-      - install-deps
+    needs: select-release
+    if: needs.select-release.outputs.publish == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || github.ref }}
+          persist-credentials: false
 
       - uses: ./.github/actions/configure-nodejs
 
@@ -29,7 +49,7 @@ jobs:
         run: npm run build:docs
 
       - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
+        uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./docs

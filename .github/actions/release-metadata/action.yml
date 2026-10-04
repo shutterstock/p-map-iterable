@@ -1,0 +1,25 @@
+name: 'Check release metadata'
+description: 'Validate the explicit release tag and train, and select an npm dist-tag'
+
+outputs:
+  version:
+    description: 'Package version from release/v<version>'
+    value: ${{ steps.metadata.outputs.version }}
+  branch:
+    description: 'Validated main or releases/<major>.<minor> branch'
+    value: ${{ steps.metadata.outputs.branch }}
+  npm-tag:
+    description: 'latest, release-<major>.<minor>, or next-<major>.<minor>'
+    value: ${{ steps.metadata.outputs.npm-tag }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '24'
+
+    - name: Validate tag, branch, version and registry channel
+      id: metadata
+      shell: bash
+      run: node .github/scripts/release-metadata.cjs

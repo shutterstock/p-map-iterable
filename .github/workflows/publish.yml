@@ -4,28 +4,41 @@ on:
   release:
     types: [published]
 
+permissions:
+  contents: read
+
+# Serialize registry checks and publication so competing trains cannot move
+# latest backwards between the metadata check and npm publish.
+concurrency:
+  group: npm-publication
+  cancel-in-progress: false
+
 jobs:
-  install-deps:
+  build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout the published release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check release metadata and select npm channel
+        id: release
+        uses: ./.github/actions/release-metadata
+
       - uses: ./.github/actions/configure-nodejs
         with:
-          lookup-only: 'true' # We only want to lookup from the cache - if a hit, this job does nothing
+          registry-url: https://registry.npmjs.org/
 
-  build:
-    needs:
-      - install-deps
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - name: Test release metadata
+        run: node --test .github/scripts/release-metadata.test.cjs
 
-      - uses: ./.github/actions/configure-nodejs
-
-      - name: Use the Release Tag Version
-        run: |
-          npm version from-git --allow-same-version --no-git-tag-version
+      - name: Use the explicit release tag version
+        env:
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+        run: npm version "$RELEASE_VERSION" --allow-same-version --no-git-tag-version --ignore-scripts
 
       - name: Build
         run: npm run build
@@ -36,11 +49,13 @@ jobs:
       - name: Test
         run: npm run test
 
-      - name: NPM registry authentication
-        run: |
-          npm set //registry.npmjs.org/:_authToken ${{ secrets.NPMJSORG_PUBLISH_TOKEN }}
-          npm config set @shutterstock:registry https://registry.npmjs.org/
+      - name: Test package consumers when available
+        run: npm run test:package --if-present
 
-      - name: Publish with CLI to NPM
+      - name: Publish with CLI to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPMJSORG_PUBLISH_TOKEN }}
+          NPM_DIST_TAG: ${{ steps.release.outputs.npm-tag }}
         run: |
-          npm publish --access public --ignore-scripts
+          test -n "$NODE_AUTH_TOKEN"
+          npm publish --access public --ignore-scripts --tag "$NPM_DIST_TAG" --registry=https://registry.npmjs.org/

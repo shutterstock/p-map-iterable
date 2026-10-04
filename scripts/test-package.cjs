@@ -15,6 +15,7 @@ const { join, resolve } = require('node:path');
 const root = resolve(__dirname, '..');
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const compiler = process.env.PACKAGE_TEST_TSC || require.resolve('typescript/bin/tsc');
+const runtimeNode = process.env.PACKAGE_TEST_NODE || process.execPath;
 const temporary = mkdtempSync(join(root, '.package-tests-'));
 const packageName = '@shutterstock/p-map-iterable';
 const classTypes = {
@@ -48,7 +49,7 @@ function run(command, args, cwd) {
 
 try {
   console.log(
-    `Node ${process.version}; ${run(process.execPath, [compiler, '--version'], root).trim()}`,
+    `Toolchain Node ${process.version}; runtime Node ${run(runtimeNode, ['--version'], root).trim()}; ${run(process.execPath, [compiler, '--version'], root).trim()}`,
   );
   // prepack must rebuild from a clean directory, even after an older build.
   mkdirSync(join(root, 'dist'), { recursive: true });
@@ -191,7 +192,7 @@ try {
           assert.match(emitted, /\bimport\b/);
           assert.doesNotMatch(emitted, /\brequire\(/);
         }
-        assert.equal(run(process.execPath, [runtime], app).trim(), 'consumer completed');
+        assert.equal(run(runtimeNode, [runtime], app).trim(), 'consumer completed');
         console.log(
           `PASS ${kind}: ${module}/${moduleResolution} ${profile.name}, declarations + runtime (public APIs + native errors)`,
         );
@@ -203,7 +204,7 @@ try {
   // A separate mixed-loader probe verifies identities without weakening either
   // consumer's module-only source. It uses the ESM app's installed tarball.
   run(
-    process.execPath,
+    runtimeNode,
     [
       '--input-type=module',
       '--eval',

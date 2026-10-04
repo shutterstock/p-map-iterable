@@ -33,5 +33,6 @@
       "@shutterstock/p-map-iterable": ["./src"]
     }
   },
-  "exclude": ["**/cdk.out", "**/dist", "**/node_modules"]
+  // TypeDoc copies linked TypeScript examples into docs/media; keep generated docs out of the build.
+  "exclude": ["**/cdk.out", "**/dist", "**/docs", "**/node_modules"]
 }

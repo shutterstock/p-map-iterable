@@ -6,7 +6,7 @@ Control asynchronous I/O concurrency and backpressure for iterable pipelines and
 
 This branch introduces the **2.x TaskQueue API**. The npm badge and [published API documentation](https://tech.shutterstock.com/p-map-iterable/) may describe the latest 1.x release until 2.x ships. See [2.x design and migration](DESIGN-2.md) and the [project review](REVIEW-2.md). Existing iterable interfaces remain exported.
 
-The [optional aliases](#optional-names-for-concurrent-work) `ConcurrentMapper`, `MappingQueue`, and `WorkerQueue` describe iterable input and result contracts for metadata lookups, capability probes and background status checks. Concurrency overlaps asynchronous work in the current JavaScript process; synchronous CPU work still uses the JavaScript event loop.
+Use these classes for concurrent metadata lookups, capability probes, background status checks, or read/write pipelines. The [optional aliases](#optional-names-for-concurrent-work) `ConcurrentMapper`, `MappingQueue`, and `WorkerQueue` describe the input and result contracts without tying the work to a particular I/O operation.
 
 ## Choose an interface
 
@@ -19,13 +19,69 @@ The [optional aliases](#optional-names-for-concurrent-work) `ConcurrentMapper`, 
 
 `TaskQueue` bounds **waiting tasks**. Iterable classes apply backpressure to **unread results**. Calling legacy `enqueue()` repeatedly without awaiting it can retain unlimited input even with a finite `maxUnread`.
 
-## Install
+## Installation and module support (2.x)
+
+Node.js 22 and newer are supported; the package is tested with Node.js 22, 24, and 26.
+TaskQueue uses standard `AbortController` / `AbortSignal` and adds no runtime
+dependency. Run `pnpm install --frozen-lockfile` before this branch's local examples.
 
 ```sh
 npm install @shutterstock/p-map-iterable
 ```
 
-The 2.x runtime recommendation is Node.js 22 or newer; final support policy and package exports are maintained separately from this API change. TaskQueue uses standard `AbortController` / `AbortSignal` and adds no runtime dependency. Use Node.js 24 and run `pnpm install --frozen-lockfile` before this branch's local examples.
+CommonJS applications can use the existing API:
+
+```js
+const { IterableMapper } = require('@shutterstock/p-map-iterable');
+```
+
+ES module applications can use native named imports:
+
+```js
+import { IterableMapper } from '@shutterstock/p-map-iterable';
+```
+
+The native ESM entrypoint forwards to the canonical CommonJS implementation so both loaders
+share the same class constructors, including when used together in one process.
+The ESM default export is also the CommonJS API object. The package exports its
+root API and `@shutterstock/p-map-iterable/package.json`; internal `dist/` paths
+are private in 2.x. TypeScript receives a CommonJS `.d.ts` or ESM `.d.mts`
+entrypoint through conditional exports. Use a matching Node module mode
+(`node16`, `node18`, `node20`, or `nodenext`, as supported by your compiler), or
+`module: "esnext"` with `moduleResolution: "bundler"` for bundler applications.
+
+With `stopOnMapperError: false`, 2.x throws Node's native `AggregateError` after
+the input has finished. Access the original rejection values through
+`error.errors`, retaining `Error` identities and primitive values. In 1.x, the
+`aggregate-error` dependency normalized primitives and plain objects to `Error`
+instances and made the aggregate iterable. Native aggregates are not iterable;
+replace iteration over the aggregate with iteration over `error.errors`. The
+aggregate message is now `One or more mapper operations failed`; rejection values
+are never coerced to strings. Inspect `error.errors` for individual messages and
+stacks. The default `stopOnMapperError: true` behavior continues to throw the first
+mapper rejection.
+
+`pnpm run test:package` creates one real `npm pack` tarball and installs it into
+separate CommonJS and ESM consumer apps with npm. The fixtures install independently of the pnpm development workspace. It checks the packed file list, strict
+TypeScript resolution and runtime behavior in the compiler's supported Node
+module modes, ESM bundler resolution, and mixed-loader API identity. The
+matrix also uses a Node-only profile with `lib: ["es2021"]`, `types: ["node"]`,
+and fixture-local Node 22 typings, verifying that no DOM declarations are loaded.
+Use Node 24 for the development toolchain. By default, the consumer runtime uses
+the same Node executable as the package-test script. To check an older supported
+runtime, including the Node 22.0 minimum, set `PACKAGE_TEST_NODE` to that Node
+binary while keeping Node 24 on `PATH`:
+
+```sh
+PACKAGE_TEST_NODE=/path/to/node-v22.0.0/bin/node pnpm run test:package
+```
+
+Only emitted consumer apps and the mixed-loader runtime probe use this override.
+npm, installs, `prepack`, builds, and TypeScript compilation still use the
+toolchain Node. `PACKAGE_TEST_TSC` can optionally select a different TypeScript
+compiler entrypoint. The test script reports both Node versions and the compiler
+version. `prepack` always builds a clean package; tests, examples, source maps,
+and build cache files are excluded.
 
 ## Event admission and concurrency
 
@@ -156,8 +212,8 @@ These use local source and assertions, without a database, network endpoint or u
 
 ```sh
 pnpm install --frozen-lockfile
-pnpm exec ts-node -r tsconfig-paths/register examples/task-queue.ts
-pnpm exec ts-node -r tsconfig-paths/register examples/task-queue-producer.ts
+npx ts-node -r tsconfig-paths/register examples/task-queue.ts
+npx ts-node -r tsconfig-paths/register examples/task-queue-producer.ts
 ```
 
 - [Event burst, overload, queued cancellation and reusable idle](examples/task-queue.ts)
@@ -165,7 +221,6 @@ pnpm exec ts-node -r tsconfig-paths/register examples/task-queue-producer.ts
 - [Iterable prefetch](examples/iterable-mapper.ts): `pnpm run example:iterable-mapper`
 - [Pushed input with consumed results](examples/iterable-queue-mapper.ts): `pnpm run example:iterable-queue-mapper`
 - [Legacy batch flushing](examples/iterable-queue-mapper-simple.ts): `pnpm run example:iterable-queue-mapper-simple`
-- [Metadata enrichment, queued capability probes and background status checks](examples/semantic-aliases.ts): `pnpm run example:semantic-aliases`
 
 ### Public application examples
 
@@ -195,9 +250,11 @@ if (writes.errors.length > 0) console.error(writes.errors);
 
 `IterableMapper` and `IterableQueueMapper` yield completion order with concurrency greater than one. A pushed-input mapper needs a concurrent result consumer to avoid producer/consumer deadlock. Call its `done()` when production ends; it has no `onIdle()` method. `Queue`, `BlockingQueue` and `IterableQueue` remain available as lower-level utilities. Legacy correctness findings and release prerequisites are tracked in [REVIEW-2.md](REVIEW-2.md).
 
-### Optional names for concurrent work
+The separate proposed [iterator lifecycle PR #22](https://github.com/shutterstock/p-map-iterable/pull/22) adds optional external cancellation and a guaranteed third mapper argument, `(element, index, signal)`. Existing two-argument callbacks remain assignable; directly invoking a `Mapper`-typed function requires supplying the third signal. Its iterator return closes the source and releases readers without awaiting uncooperative mapper completion. See the [migration details](DESIGN-2.md#proposed-iterable-cancellation-changes-in-22). Those companion changes are not merged into this API branch.
 
-The package exports three optional class aliases:
+## Optional names for concurrent work
+
+The package exports three optional class aliases. Choose the name that makes the input and result contracts clearest in your application:
 
 | Alias | Original class | Input | Results and completion |
 | --- | --- | --- | --- |
@@ -206,10 +263,16 @@ The package exports three optional class aliases:
 | `WorkerQueue` | `IterableQueueMapperSimple` | Awaited `enqueue(item)` calls | Results are consumed internally. After the last enqueue, await `onIdle()` and check `errors`. |
 
 ```typescript
-import { ConcurrentMapper, MappingQueue, WorkerQueue } from '@shutterstock/p-map-iterable';
+import {
+  ConcurrentMapper,
+  MappingQueue,
+  WorkerQueue,
+} from '@shutterstock/p-map-iterable';
 ```
 
-The aliases are the original classes, with the same constructor identity, generic instance types, and subclassing behavior. Defaults, result ordering, backpressure, and error handling are identical through either name. Matching option types are available from the package root using `import type`:
+The aliases are the original classes, with the same constructor identity, generic instance types, and subclassing behavior. Existing imports continue to work. Defaults, result ordering, backpressure, and error handling are identical through either name.
+
+Matching option types are available from the package root using `import type`:
 
 | Option alias | Original option type | Configuration |
 | --- | --- | --- |
@@ -217,15 +280,15 @@ The aliases are the original classes, with the same constructor identity, generi
 | `MappingQueueOptions` | `IterableQueueMapperOptions` | `concurrency`, `maxUnread`, `stopOnMapperError` |
 | `WorkerQueueOptions` | `IterableQueueMapperSimpleOptions` | `concurrency` |
 
-`MappingQueue` needs a concurrent result consumer even when results can be discarded. `WorkerQueue` consumes results internally, collects failures in `errors` and permanently ends input at `onIdle()`. Each iterable queue uses one callback supplied at construction; awaiting `enqueue()` confirms admission rather than task completion. For ongoing event-driven work, `TaskQueue` provides bounded admission, cancellation handles, per-task outcomes and reusable idle waits.
+`MappingQueue` must have a result consumer even when you do not need the results. Awaiting every enqueue before starting iteration can block once the result buffer fills. Use `WorkerQueue` when results can be discarded. Its `onIdle()` permanently ends input; subsequent enqueues reject. Worker failures are collected in `errors` while other inputs continue to run, so check that property after shutdown.
 
-See [examples/semantic-aliases.ts](examples/semantic-aliases.ts) and run `pnpm run example:semantic-aliases` for examples of all three aliases.
+Each iterable queue alias uses one fixed callback supplied at construction. Awaiting `enqueue()` provides producer backpressure and confirms acceptance of an input. Calling it without awaiting can accumulate pending inputs. `WorkerQueue.onIdle()` is a final shutdown operation. For ongoing event-driven work requiring bounded admission, cancellation, per-task handles or reusable idle waits, use `TaskQueue` as described above.
 
-The separate proposed [iterator lifecycle PR #22](https://github.com/shutterstock/p-map-iterable/pull/22) adds optional external cancellation and a guaranteed third mapper argument, `(element, index, signal)`. Existing two-argument callbacks remain assignable; directly invoking a `Mapper`-typed function requires supplying the third signal. Its iterator return closes the source and releases readers without awaiting uncooperative mapper completion. See the [migration details](DESIGN-2.md#proposed-iterable-cancellation-changes-in-22). Those companion changes are not merged into this API branch.
+See [examples/semantic-aliases.ts](./examples/semantic-aliases.ts) for metadata enrichment, queued capability probes with a concurrent result consumer, and background status checks with collected errors. Run it with `pnpm run example:semantic-aliases`.
 
 ## Contributing
 
-Use Node.js 24 and pnpm 12.7.0, pinned in `package.json`:
+Use Node.js 24 and the pnpm version pinned in `package.json`:
 
 ```sh
 nvm use
@@ -235,10 +298,17 @@ pnpm install --frozen-lockfile
 pnpm run build
 pnpm run build:docs
 pnpm run lint
-pnpm run test --runInBand
+pnpm run test
 pnpm run example:semantic-aliases
 ```
 
-Corepack enforces the package manager pin. The workspace configuration requires third-party releases to be at least seven days old and preserves a single-document v9 pnpm lockfile. On macOS, `packageImportMethod: auto` prefers APFS copy-on-write clones from a shared store on the same volume as the checkout, with hard-link/copy fallback elsewhere.
+Corepack enforces the pnpm version in `package.json`. pnpm's additional package
+manager switching is disabled to keep the single-document lockfile readable by
+GitHub's dependency graph and Dependabot. The pnpm configuration requires package
+releases to be at least seven days old.
+On macOS, `packageImportMethod: auto` prefers APFS copy-on-write clones from the
+shared pnpm store, so worktrees share package data until a file changes. Keep the
+store on the same APFS volume as the checkout. Other supported filesystems use
+pnpm's available import method.
 
-The documentation build loads the [TypeDoc 0.28-compatible Mermaid plugin](https://github.com/boneskull/typedoc-plugin-mermaid2) and bundles pinned Mermaid assets locally; the browser renders both light and dark SVG diagrams without a Mermaid CDN. Generated docs are excluded from TypeScript compilation. Release and module-format changes are maintained separately. Complete the updated 1.1.x release and cut `releases/1.1` before merging 2.x changes.
+The documentation build loads the TypeDoc 0.28-compatible Mermaid plugin and bundles pinned Mermaid assets locally. Generated docs are excluded from TypeScript compilation. Complete the maintenance release and cut `releases/1.1` before merging 2.x changes.

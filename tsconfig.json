@@ -22,6 +22,7 @@
     "noEmitHelpers": false,
     "composite": true,
     "target": "es2018",
+    "lib": ["es2021"],
     "module": "Node16",
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
@@ -33,6 +34,14 @@
       "@shutterstock/p-map-iterable": ["./src"]
     }
   },
-  // TypeDoc copies linked TypeScript examples into docs/media; keep generated docs out of the build.
-  "exclude": ["**/cdk.out", "**/dist", "**/docs", "**/node_modules"]
+  // TypeDoc copies linked TypeScript examples into docs/media; exclude generated docs.
+  "exclude": [
+    "**/cdk.out",
+    "**/dist",
+    "**/node_modules",
+    "**/docs",
+    "tests/package",
+    ".package-tests-*",
+    ".validation-tools"
+  ]
 }

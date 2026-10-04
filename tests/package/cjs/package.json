@@ -1,0 +1,5 @@
+{
+  "name": "package-consumer-cjs",
+  "private": true,
+  "type": "commonjs"
+}

@@ -22,6 +22,77 @@ describe('BlockingQueue', () => {
     });
   });
 
+  describe('producer backpressure and shutdown', () => {
+    it.each([undefined, { maxUnread: undefined }])(
+      'uses the default buffer when options are %p',
+      async (options) => {
+        const queue = new BlockingQueue<number>(options);
+        for (let value = 1; value <= 8; value++) await queue.enqueue(value);
+
+        const accepted = jest.fn();
+        const ninth = queue.enqueue(9).then(accepted);
+        await Promise.resolve();
+        expect(accepted).not.toHaveBeenCalled();
+
+        expect(await queue.dequeue()).toBe(1);
+        await ninth;
+        expect(accepted).toHaveBeenCalledTimes(1);
+        queue.done();
+
+        const remaining = [];
+        for (let value = 2; value <= 9; value++) remaining.push(await queue.dequeue());
+        expect(remaining).toEqual([2, 3, 4, 5, 6, 7, 8, 9]);
+        await expect(queue.dequeue()).resolves.toBeUndefined();
+      },
+    );
+
+    it('allows an unlimited buffer and drains it in FIFO order after done', async () => {
+      const queue = new BlockingQueue<number>({ maxUnread: Number.POSITIVE_INFINITY });
+      const values = Array.from({ length: 20 }, (_, index) => index);
+      await Promise.all(values.map(async (value) => queue.enqueue(value)));
+      expect(queue.length).toBe(values.length);
+      queue.done();
+
+      const results = await Promise.all(values.map(async () => queue.dequeue()));
+      expect(results).toEqual(values);
+      expect(queue.length).toBe(0);
+      await expect(queue.dequeue()).resolves.toBeUndefined();
+      await expect(queue.enqueue(20)).rejects.toThrow('`enqueue` called after `done` called');
+    });
+
+    it('closes a zero-buffer queue without losing already blocked enqueues', async () => {
+      const queue = new BlockingQueue<number>({ maxUnread: 0 });
+      const accepted: number[] = [];
+      const writes = [1, 2, 3].map(async (value) => {
+        await queue.enqueue(value);
+        accepted.push(value);
+      });
+      await Promise.resolve();
+      expect(accepted).toEqual([]);
+      queue.done();
+      await expect(queue.enqueue(4)).rejects.toThrow('`enqueue` called after `done` called');
+
+      for (const value of [1, 2, 3]) {
+        expect(await queue.dequeue()).toBe(value);
+        await writes[value - 1];
+        expect(accepted).toEqual(Array.from({ length: value }, (_, index) => index + 1));
+      }
+      await Promise.all(writes);
+      await expect(queue.dequeue()).resolves.toBeUndefined();
+    });
+
+    it('releases every reader waiting on an empty queue when closed repeatedly', async () => {
+      const queue = new BlockingQueue<number>();
+      const reads = [queue.dequeue(), queue.dequeue(), queue.dequeue()];
+      queue.done();
+      queue.done();
+
+      await expect(Promise.all(reads)).resolves.toEqual([undefined, undefined, undefined]);
+      await expect(queue.dequeue()).resolves.toBeUndefined();
+      await expect(queue.enqueue(1)).rejects.toThrow('`enqueue` called after `done` called');
+    });
+  });
+
   describe('maxUnread: 0', () => {
     it('single item enqueue/dequeue works', async () => {
       const queue = new BlockingQueue<number>({ maxUnread: 0 });

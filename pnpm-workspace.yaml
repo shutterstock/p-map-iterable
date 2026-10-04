@@ -1,0 +1,10 @@
+# Require third-party releases to be at least seven days old.
+minimumReleaseAge: 10080
+
+# Use copy-on-write clones on APFS; retain one shared pnpm store per volume.
+packageImportMethod: clone
+
+# Native tooling used by TypeDoc and Jest; all other dependency scripts stay blocked.
+allowBuilds:
+  '@parcel/watcher': true
+  unrs-resolver: true

@@ -193,7 +193,7 @@ The key difference between `IterableMapper` and `pMap` are that `IterableMapper`
 
 See [examples/iterable-mapper.ts](./examples/iterable-mapper.ts) for an example.
 
-Run the example with `npm run example:iterable-mapper`
+Run the example with `pnpm run example:iterable-mapper`
 
 # `IterableQueueMapper`
 
@@ -203,7 +203,7 @@ Run the example with `npm run example:iterable-mapper`
 
 See [examples/iterable-queue-mapper.ts](./examples/iterable-queue-mapper.ts) for an example.
 
-Run the example with `npm run example:iterable-queue-mapper`
+Run the example with `pnpm run example:iterable-queue-mapper`
 
 # `IterableQueueMapperSimple`
 
@@ -213,7 +213,7 @@ Run the example with `npm run example:iterable-queue-mapper`
 
 See [examples/iterable-queue-mapper-simple.ts](./examples/iterable-queue-mapper-simple.ts) for an example.
 
-Run the example with `npm run example:iterable-queue-mapper-simple`
+Run the example with `pnpm run example:iterable-queue-mapper-simple`
 
 ## Optional names for concurrent work
 
@@ -247,14 +247,25 @@ Matching option types are available from the package root using `import type`:
 
 Each queue uses one fixed callback supplied at construction. Awaiting `enqueue()` provides producer backpressure and confirms acceptance of an input. Calling it without awaiting can accumulate pending inputs. For ongoing event-driven work, the application supplies any admission limits, cancellation, deduplication, or per-item completion handles. `WorkerQueue.onIdle()` is a final shutdown operation, so an application that needs reusable idle waits must manage that separately.
 
-See [examples/semantic-aliases.ts](./examples/semantic-aliases.ts) for metadata enrichment, queued capability probes with a concurrent result consumer, and background status checks with collected errors. Run it with `npm run example:semantic-aliases`.
+See [examples/semantic-aliases.ts](./examples/semantic-aliases.ts) for metadata enrichment, queued capability probes with a concurrent result consumer, and background status checks with collected errors. Run it with `pnpm run example:semantic-aliases`.
 
 # Contributing - Setting up Build Environment
 
-- `nvm use`
-- `npm i`
-- `npm run build`
-- `npm run build:docs`
-- `npm run lint`
-- `npm run test`
-- `npm run example:semantic-aliases`
+Use Node.js 24 and the pnpm version pinned in `package.json`:
+
+```sh
+nvm use
+npm install --global pnpm@12.7.0
+pnpm install --frozen-lockfile
+pnpm run build
+pnpm run build:docs
+pnpm run lint
+pnpm run test
+pnpm run example:semantic-aliases
+```
+
+The pnpm configuration requires package releases to be at least seven days old.
+On macOS, `packageImportMethod: clone` uses APFS copy-on-write clones from the
+shared pnpm store, so worktrees share package data until a file changes. Keep the
+store on the same APFS volume as the checkout. Other supported filesystems use
+pnpm's available import method.

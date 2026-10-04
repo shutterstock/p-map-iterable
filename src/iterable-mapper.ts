@@ -188,10 +188,9 @@ type NewElementOrError<NewElement = unknown> = { element: NewElement } | { error
  * }
  * ```
  *
- * This reduces iteration time to about `max((max(readTime, writeTime) - cpuOpTime, cpuOpTime))`
- * by overlapping reads and writes with the CPU processing step.
- * In this contrived example, the loop time is reduced to 500ms - 20ms = 480ms.
- * In cases where the CPU usage time is higher, the impact can be greater.
+ * Reads, processing, and writes overlap, but throughput remains limited by the slowest stage.
+ * In this example, serial 500ms writes limit steady-state throughput to at most two items
+ * per second, even when reads and CPU processing run in the background.
  *
  * @example
  *
@@ -225,9 +224,10 @@ type NewElementOrError<NewElement = unknown> = { element: NewElement } | { error
  * }
  * ```
  *
- * This reduces iteration time to about 20ms by overlapping reads and writes with the CPU processing step.
- * In this contrived (but common) example we would get a 41x improvement in throughput, removing 97.5% of
- * the time to process each item and fully utilizing the CPU time available in the JS event loop.
+ * With ten concurrent reads and writes, the ideal steady-state limits are 30ms per item
+ * for reads, 50ms for writes, and 20ms for CPU processing. Writes remain the bottleneck;
+ * concurrency does not guarantee a 20ms iteration time. Actual throughput also depends
+ * on service limits, scheduling, and startup/shutdown costs.
  *
  * @category Iterable Input
  */

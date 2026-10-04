@@ -6,7 +6,9 @@ import {
   QueueClosedError,
   QueueFullError,
   TaskCancelledError,
+  Task,
   TaskHandle,
+  TaskOutcome,
 } from './index';
 
 function deferred<T>() {
@@ -137,6 +139,34 @@ describe('TaskQueue', () => {
     ).rejects.toBe(reason);
     await expect(queue.add(() => Promise.reject(undefined))).rejects.toBeUndefined();
     await expect(queue.add(() => undefined)).resolves.toBeUndefined();
+    await queue.close();
+  });
+
+  it('unwraps promise-valued task types in outcomes and add results', async () => {
+    const queue = new TaskQueue();
+    const task: Task<Promise<number>> = () => Promise.resolve(42);
+    const handle: TaskHandle<Promise<number>> = queue.submit(task);
+    const added: Promise<number> = queue.add<Promise<number>>(task);
+    const outcome: TaskOutcome<Promise<number>> = await handle.result;
+    if (outcome.status !== 'fulfilled') throw new Error('Expected successful task');
+    // TypeScript checks these assignments during build; Jest checks the resolved values.
+    const value: number = outcome.value;
+    expect(value).toBe(42);
+    await expect(added).resolves.toBe(42);
+    await queue.close();
+  });
+
+  it('recursively unwraps nested promise-like task types', async () => {
+    const queue = new TaskQueue();
+    const task: Task<PromiseLike<PromiseLike<number>>> = () =>
+      new Promise<Promise<number>>((resolve) => resolve(Promise.resolve(43)));
+    const handle = queue.submit<PromiseLike<PromiseLike<number>>>(task);
+    const added: Promise<number> = queue.add(task);
+    const outcome = await handle.result;
+    if (outcome.status !== 'fulfilled') throw new Error('Expected successful task');
+    const value: number = outcome.value;
+    expect(value).toBe(43);
+    await expect(added).resolves.toBe(43);
     await queue.close();
   });
 

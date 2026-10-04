@@ -19,7 +19,7 @@ The [README public examples](README.md#public-application-examples) link verifie
 ```typescript
 type Task<T> = (signal: AbortSignal) => T | PromiseLike<T>;
 type TaskOutcome<T> =
-  | { status: 'fulfilled'; value: T }
+  | { status: 'fulfilled'; value: Awaited<T> }
   | { status: 'rejected'; reason: unknown };
 
 interface TaskHandle<T> {
@@ -36,7 +36,7 @@ interface TaskHandle<T> {
 
 `submit` is suitable for event callbacks and makes ignored background failures safe from unhandled promise rejection. Errors remain explicit outcomes; the queue does not accumulate an unbounded error list. `add` is suitable for IPC and request/response handlers that already await their result. Its promise must be handled like any other rejecting promise. Admission exceptions take precedence in this order: invalid task, closed queue, pre-aborted signal, full queue.
 
-User task code starts in a microtask after submission. Running slots are reserved synchronously before the handle is returned, so a burst in the same JS turn cannot bypass the limit. This also prevents synchronous tasks from reentering the queue before their caller receives the handle. A promise returned by a task is assimilated, including custom thenables and throwing `then` accessors. The scheduler handles synchronous throws and asynchronous rejections through one settlement path.
+User task code starts in a microtask after submission. Running slots are reserved synchronously before the handle is returned, so a burst in the same JS turn cannot bypass the limit. This also prevents synchronous tasks from reentering the queue before their caller receives the handle. A promise returned by a task is assimilated, including custom thenables and throwing `then` accessors. Fulfilled outcomes contain `Awaited<T>`, and `add<T>` returns `Promise<Awaited<T>>`: even a task explicitly typed as `Task<Promise<number>>` delivers a number. Nested promise-like types unwrap recursively. The scheduler handles synchronous throws and asynchronous rejections through one settlement path.
 
 An `undefined` value or rejection reason is valid. Outcomes use an explicit status tag rather than treating `undefined` as a sentinel. Ordinary task failures affect only that task and never stop the scheduler or reject drain/close.
 

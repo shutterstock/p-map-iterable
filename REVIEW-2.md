@@ -18,6 +18,7 @@ The updated 1.1.x release and `releases/1.1` branch must exist before any 2.x me
 | P2 | Legacy interfaces allow `Infinity`. Unbounded runner creation/input retention can defeat resource control; `maxUnread` includes active/read-ahead concerns that differ from pending inputs. | TaskQueue rejects Infinity and provides independent finite limits. Do not silently change legacy option semantics in an additive API PR. |
 | P2 | A producer that finishes all enqueue calls before iterating `IterableQueueMapper` results can deadlock under output backpressure. Its source documentation incorrectly recommends `onIdle()`, a method it does not have. | README now requires concurrent production/consumption and describes the actual lifecycle. Existing TSDoc can be corrected with the iterator work without claiming a new method exists. |
 | Resolved here / P2 | TypeDoc copies linked example sources into `docs/media`; including generated output in TypeScript inputs previously produced repeat-build import/type errors. Mermaid fences were previously shown as code. | `docs` is now excluded from tsconfig. Compatible TypeDoc 0.28 Mermaid rendering uses local Mermaid ESM assets; three diagrams render to six light/dark SVGs in a browser without external network requests. Both fixes are part of this authorized follow-up. |
+| Resolved here / P2 | A `Task<Promise<number>>` resolved to a number but its fulfilled outcome and `add` callback were typed as promises, allowing invalid `.then` calls. Two typed regression cases failed four build-time assignments with the original declarations. | `TaskOutcome<T>.value` now uses `Awaited<T>`, and `add<T>` returns `Promise<Awaited<T>>`. Promise and nested promise-like task types match the fully assimilated runtime values; scheduler behavior is unchanged. |
 
 Legacy reproductions describe the original baseline. The initial #22 head `0a85e72` was temporarily combined in this workspace for validation: all 117 tests, including 15 lifecycle regressions, passed. That integration was removed at the parent's request; the final API branch is based only on maintenance `0784c65`. The expanded proposal at `c25aaef`, also based on `0784c65`, adds external cancellation, a guaranteed third mapper signal, listener cleanup and consumer-independent producer failure delivery. Its `BlockingQueue.abort` distinguishes an omitted reason from explicit undefined. The parent reports 94 tests passing, including 25 lifecycle regressions, plus build/lint for that separate head. These are proposed companion changes, not merged fixes in #23. TaskQueue tests independently cover its own task contracts; final combined validation remains with the parent.
 
@@ -63,12 +64,13 @@ Validated against the maintenance baseline with Node.js 24.21.0, TypeScript 6.0.
 
 | Check | Result |
 | --- | --- |
-| Full Jest suite | 7 suites / 102 tests passed; 33 new TaskQueue tests |
+| Full Jest suite | 7 suites / 104 tests passed; 35 new TaskQueue tests |
+| Promise-valued result type regressions | Both explicit Promise and nested PromiseLike cases compile and resolve to numbers; the original declarations failed four type assignments |
 | TaskQueue coverage | 100% statements/lines/functions, 97.87% branches |
 | Repository lint and TypeScript build | Passed |
 | Fresh npm 11 install and lock regeneration | `npm ci --min-release-age=7` passed; regenerating the docs additions from maintenance `0784c65` produced an identical lockfile; ESLint 10.11.0, globals 17.12.0, @types/node 26.6.3 and typescript-eslint 8.70.1 retained |
 | Both new examples | Passed with their documented assertions |
-| Node.js 22.22.1 compatibility smoke | All 33 TaskQueue tests, strict subprocess and both examples passed |
+| Node.js 22.22.1 compatibility smoke | All 35 TaskQueue tests and the strict subprocess passed; both examples also passed during the earlier docs follow-up |
 | Node.js 22.22.1 documentation build | Plugin loading, local asset copying and subsequent TypeScript build passed |
 | Generated docs compiler inputs | Zero generated-doc files among the compiler's 402 inputs |
 | Mermaid browser rendering | Three diagrams × light/dark = six SVGs; unique IDs, nonempty viewboxes, visible dimensions, zero browser exceptions; external requests blocked |

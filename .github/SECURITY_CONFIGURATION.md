@@ -47,6 +47,19 @@ upstream release tag changes.
 Dependency review fails on newly introduced high or critical vulnerabilities
 in runtime, development, or unknown dependency scopes. It does not replace
 Dependabot alerts for vulnerabilities discovered in existing dependencies.
+
+The same check enforces a license allowlist on added or updated direct and
+transitive dependencies, including development tools. It uses GitHub's
+dependency graph, populated from package manifests and lockfiles; no separate
+package/version approval inventory is needed. Disallowed, invalid, and missing
+licenses fail the check. SPDX expressions such as `MIT OR CC0-1.0` are supported:
+an `OR` needs one allowed option, while an `AND` needs all licenses allowed.
+
+The allowlist is declared in `workflows/dependency-review.yml`. It follows the
+Pwr apps' list and includes `CC-BY-4.0` for the existing `caniuse-lite` browser
+data. Changes to this license policy require review. This checks declared
+metadata rather than analyzing license text in every installed file.
+
 CodeQL scans TypeScript/JavaScript and Actions on PRs, pushes to `main`, and
 weekly schedules. Both checks run on ordinary `pull_request` events so fork and
 Dependabot PRs can be checked without exposing release secrets.

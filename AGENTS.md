@@ -36,16 +36,25 @@ with the code when contracts or commands change.
 
 ## Local work
 
-Use Node.js 24 to match CI. [.nvmrc](.nvmrc) still selects Node.js 18.
-Use npm with the checked-in [package-lock.json](package-lock.json).
+Use Node.js 24 for development and CI tooling. [.nvmrc](.nvmrc) selects Node.js 24.
+CI also tests the library on a cached compatible Node.js 22 version; exact minor
+versions are not required. Installation, compilation, docs, and publication use
+the Node.js 24 toolchain.
+
+Use pnpm 12.7.0, pinned by `packageManager` in [package.json](package.json), with
+the checked-in [pnpm-lock.yaml](pnpm-lock.yaml). Enable pnpm through Corepack with
+`corepack enable pnpm` and `corepack prepare pnpm@12.7.0 --activate`.
+[pnpm-workspace.yaml](pnpm-workspace.yaml) keeps a seven-day minimum release age
+and prefers APFS copy-on-write imports, with hard-link/copy fallback elsewhere.
+Preserve its installation policy and the single-document v9 lockfile.
 
 | Command | Purpose |
 | --- | --- |
-| `npm ci` | Install the locked dependencies. |
-| `npm run build` | Compile TypeScript and prepare package output in `dist/`. |
-| `npm run build:docs` | Generate API docs from `src/index.ts` in `docs/`. |
-| `npm run lint` | Check source style and promise handling. |
-| `npm test` | Run the Jest suite and collect coverage. |
+| `pnpm install --frozen-lockfile` | Install the locked dependencies. |
+| `pnpm run build` | Compile TypeScript and prepare package output in `dist/`. |
+| `pnpm run build:docs` | Generate API docs from `src/index.ts` in `docs/`. |
+| `pnpm run lint` | Check source style and promise handling. |
+| `pnpm run test` | Run the Jest suite and collect coverage. |
 
 For code changes, run the relevant tests first. Then run the build, docs build,
 lint, and full test suite before handoff. For documentation-only changes, check

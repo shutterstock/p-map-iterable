@@ -72,11 +72,11 @@ There is no configured coverage threshold.
 Run one suite from the repository root:
 
 ```sh
-npm test -- --runTestsByPath src/iterable-mapper.test.ts --runInBand
+pnpm run test --runTestsByPath src/iterable-mapper.test.ts --runInBand
 ```
 
 Add behavior tests beside the class. Use `index.test.ts` for package exports and
-aliases. Run `npm run build` to check TypeScript types; Jest transforms files in
+aliases. Run `pnpm run build` to check TypeScript types; Jest transforms files in
 isolation.
 
 For scheduling changes, check empty sources, concurrent readers and writers,

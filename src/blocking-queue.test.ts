@@ -1,6 +1,10 @@
 /// <reference types="jest" />
 import { BlockingQueue } from './index';
 
+async function nextTurn(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve));
+}
+
 describe('BlockingQueue', () => {
   beforeAll(() => {
     // nothing
@@ -32,6 +36,109 @@ describe('BlockingQueue', () => {
   });
 
   describe('producer backpressure and shutdown', () => {
+    it.each([0, 1])(
+      'wakes exactly one waiting reader per enqueue with maxUnread=%p',
+      async (maxUnread) => {
+        const queue = new BlockingQueue<number>({ maxUnread });
+        const received: [number, number | undefined][] = [];
+        const read = async (index: number) => {
+          const value = await queue.dequeue();
+          received.push([index, value]);
+          return value;
+        };
+        const reads = [read(0), read(1), read(2)];
+        await nextTurn();
+        expect(received).toEqual([]);
+
+        for (const value of [1, 2, 3]) {
+          const write = queue.enqueue(value);
+          await nextTurn();
+          expect(received).toEqual(Array.from({ length: value }, (_, index) => [index, index + 1]));
+          expect(queue.length).toBe(0);
+          await write;
+        }
+        await expect(Promise.all(reads)).resolves.toEqual([1, 2, 3]);
+
+        // Enqueue without a waiting reader, then register new readers after draining.
+        const ahead = queue.enqueue(4);
+        await expect(queue.dequeue()).resolves.toBe(4);
+        await ahead;
+        const laterReads = [read(3), read(4)];
+        const write = queue.enqueue(5);
+        await nextTurn();
+        expect(received).toEqual([
+          [0, 1],
+          [1, 2],
+          [2, 3],
+          [3, 5],
+        ]);
+        await write;
+
+        // The last reader must still be blocked until shutdown releases it.
+        queue.done();
+        await expect(Promise.all(laterReads)).resolves.toEqual([5, undefined]);
+        expect(received).toEqual([
+          [0, 1],
+          [1, 2],
+          [2, 3],
+          [3, 5],
+          [4, undefined],
+        ]);
+        await expect(queue.dequeue()).resolves.toBeUndefined();
+      },
+    );
+
+    it.each([0, 1, 3])(
+      'releases exactly one blocked producer per dequeue with maxUnread=%p',
+      async (maxUnread) => {
+        const queue = new BlockingQueue<number>({ maxUnread });
+        for (let value = 1; value <= maxUnread; value++) await queue.enqueue(value);
+        const accepted: number[] = [];
+        const blockedValues = [maxUnread + 1, maxUnread + 2, maxUnread + 3];
+        const writes = blockedValues.map(async (value) => {
+          await queue.enqueue(value);
+          accepted.push(value);
+        });
+        await nextTurn();
+        expect(accepted).toEqual([]);
+
+        for (let index = 0; index < writes.length; index++) {
+          await expect(queue.dequeue()).resolves.toBe(index + 1);
+          await nextTurn();
+          expect(accepted).toEqual(blockedValues.slice(0, index + 1));
+          await writes[index];
+        }
+        await Promise.all(writes);
+
+        // Drain without waiting producers, then fill the buffer and block a new one.
+        for (let value = 4; value <= maxUnread + 3; value++) {
+          await expect(queue.dequeue()).resolves.toBe(value);
+        }
+        const refill = Array.from({ length: maxUnread }, (_, index) => 100 + index);
+        for (const value of refill) await queue.enqueue(value);
+        const laterValue = 100 + maxUnread;
+        const laterWrite = (async () => {
+          await queue.enqueue(laterValue);
+          accepted.push(laterValue);
+        })();
+        await nextTurn();
+        expect(accepted).toEqual(blockedValues);
+
+        await expect(queue.dequeue()).resolves.toBe(maxUnread === 0 ? laterValue : refill[0]);
+        await nextTurn();
+        expect(accepted).toEqual([...blockedValues, laterValue]);
+        await laterWrite;
+        queue.done();
+        if (maxUnread > 0) {
+          for (const value of [...refill.slice(1), laterValue]) {
+            await expect(queue.dequeue()).resolves.toBe(value);
+          }
+        }
+        expect(queue.length).toBe(0);
+        await expect(queue.dequeue()).resolves.toBeUndefined();
+      },
+    );
+
     it.each([0, 1, 4])(
       'serves waiting readers and producers in FIFO order with maxUnread=%p',
       async (maxUnread) => {

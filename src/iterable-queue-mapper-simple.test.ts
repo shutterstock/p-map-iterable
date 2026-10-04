@@ -1,8 +1,21 @@
 /// <reference types="jest" />
-import { promisify } from 'util';
 import { IterableQueueMapperSimple } from './iterable-queue-mapper-simple';
 
-const sleep = promisify(setTimeout);
+async function sleep<T = void>(ms: number, value?: T): Promise<T> {
+  return new Promise<T>((resolve) => setTimeout(() => resolve(value as T), ms));
+}
+
+async function withVirtualTime(test: () => Promise<void>): Promise<void> {
+  jest.useFakeTimers();
+  try {
+    const result = test();
+    void result.catch(() => undefined);
+    await jest.runAllTimersAsync();
+    await result;
+  } finally {
+    jest.useRealTimers();
+  }
+}
 
 describe('IterableQueueMapperSimple', () => {
   beforeEach(() => {
@@ -27,38 +40,40 @@ describe('IterableQueueMapperSimple', () => {
   });
 
   it('errors caught and exposed', async () => {
-    const startTime = Date.now();
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const mapper = jest.fn(async (item: number): Promise<void> => {
-      await sleep(200);
-      throw new Error('stop this now');
-    });
-    const backgroundWriter = new IterableQueueMapperSimple(mapper, { concurrency: 4 });
+    await withVirtualTime(async () => {
+      const startTime = Date.now();
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const mapper = jest.fn(async (item: number): Promise<void> => {
+        await sleep(200);
+        throw new Error('stop this now');
+      });
+      const backgroundWriter = new IterableQueueMapperSimple(mapper, { concurrency: 4 });
 
-    for (let i = 0; i < 10; i++) {
-      await backgroundWriter.enqueue(1);
+      for (let i = 0; i < 10; i++) {
+        await backgroundWriter.enqueue(1);
 
-      if (backgroundWriter.errors.length !== 0) {
-        expect(i).toBe(4);
-        expect(Date.now() - startTime).toBeGreaterThanOrEqual(200);
-        break;
+        if (backgroundWriter.errors.length !== 0) {
+          expect(i).toBe(4);
+          expect(Date.now() - startTime).toBeGreaterThanOrEqual(200);
+          break;
+        }
       }
-    }
-    // Need to wait until the backgroundWriter is idle (has finished any pending requests)
-    expect(backgroundWriter.isIdle).toBe(false);
-    await backgroundWriter.onIdle();
-    expect(backgroundWriter.isIdle).toBe(true);
+      // Need to wait until the backgroundWriter is idle (has finished any pending requests)
+      expect(backgroundWriter.isIdle).toBe(false);
+      await backgroundWriter.onIdle();
+      expect(backgroundWriter.isIdle).toBe(true);
 
-    expect(backgroundWriter.errors.length).toBe(5);
-    expect(backgroundWriter.errors[0].error).toBeInstanceOf(Error);
-    expect((backgroundWriter.errors[0].error as Error).message).toBe('stop this now');
+      expect(backgroundWriter.errors.length).toBe(5);
+      expect(backgroundWriter.errors[0].error).toBeInstanceOf(Error);
+      expect((backgroundWriter.errors[0].error as Error).message).toBe('stop this now');
 
-    // Show that double onIdle() does not hang or cause an error
-    await backgroundWriter.onIdle();
+      // Show that double onIdle() does not hang or cause an error
+      await backgroundWriter.onIdle();
 
-    expect(backgroundWriter.isIdle).toBe(true);
-    expect(mapper.mock.calls.length).toBe(5);
-    expect(Date.now() - startTime).toBeGreaterThanOrEqual(2 * 200);
+      expect(backgroundWriter.isIdle).toBe(true);
+      expect(mapper.mock.calls.length).toBe(5);
+      expect(Date.now() - startTime).toBeGreaterThanOrEqual(2 * 200);
+    });
   });
 
   it('multiple success works - concurrency 1, w/ retrier', async () => {
@@ -85,43 +100,45 @@ describe('IterableQueueMapperSimple', () => {
   });
 
   it('concurrency 4 sends 4 concurrently then waits', async () => {
-    const sleepDurationMs = 500;
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const mapper = jest.fn(async (item: number): Promise<void> => {
-      await sleep(sleepDurationMs);
+    await withVirtualTime(async () => {
+      const sleepDurationMs = 500;
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const mapper = jest.fn(async (item: number): Promise<void> => {
+        await sleep(sleepDurationMs);
+      });
+      const backgroundWriter = new IterableQueueMapperSimple(mapper, {
+        concurrency: 4,
+      });
+
+      // First 4 added should not wait at all
+      const startTime = Date.now();
+      await backgroundWriter.enqueue(1);
+      await backgroundWriter.enqueue(2);
+      await backgroundWriter.enqueue(3);
+      await backgroundWriter.enqueue(4);
+      expect(Date.now() - startTime).toBeLessThan(sleepDurationMs);
+
+      expect(mapper.mock.calls.length).toBe(4);
+
+      // Next one added should have had to wait for at least one wait period
+      await backgroundWriter.enqueue(5);
+
+      expect(mapper.mock.calls.length).toBe(5);
+
+      expect(Date.now() - startTime).toBeGreaterThanOrEqual(sleepDurationMs);
+
+      // Need to wait until the backgroundWriter is idle (has finished any pending requests)
+      expect(backgroundWriter.isIdle).toBe(false);
+      await backgroundWriter.onIdle();
+
+      expect(backgroundWriter.isIdle).toBe(true);
+
+      expect(Date.now() - startTime).toBeGreaterThanOrEqual(2 * sleepDurationMs);
+      expect(Date.now() - startTime).toBeLessThan(2.2 * sleepDurationMs);
+
+      expect(mapper).toHaveBeenCalledTimes(5);
+
+      expect(backgroundWriter.errors.length).toBe(0);
     });
-    const backgroundWriter = new IterableQueueMapperSimple(mapper, {
-      concurrency: 4,
-    });
-
-    // First 4 added should not wait at all
-    const startTime = Date.now();
-    await backgroundWriter.enqueue(1);
-    await backgroundWriter.enqueue(2);
-    await backgroundWriter.enqueue(3);
-    await backgroundWriter.enqueue(4);
-    expect(Date.now() - startTime).toBeLessThan(sleepDurationMs);
-
-    expect(mapper.mock.calls.length).toBe(4);
-
-    // Next one added should have had to wait for at least one wait period
-    await backgroundWriter.enqueue(5);
-
-    expect(mapper.mock.calls.length).toBe(5);
-
-    expect(Date.now() - startTime).toBeGreaterThanOrEqual(sleepDurationMs);
-
-    // Need to wait until the backgroundWriter is idle (has finished any pending requests)
-    expect(backgroundWriter.isIdle).toBe(false);
-    await backgroundWriter.onIdle();
-
-    expect(backgroundWriter.isIdle).toBe(true);
-
-    expect(Date.now() - startTime).toBeGreaterThanOrEqual(2 * sleepDurationMs);
-    expect(Date.now() - startTime).toBeLessThan(2.2 * sleepDurationMs);
-
-    expect(mapper).toHaveBeenCalledTimes(5);
-
-    expect(backgroundWriter.errors.length).toBe(0);
   });
 });

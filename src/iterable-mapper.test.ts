@@ -1,8 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /// <reference types="jest" />
 import { IterableMapper } from './iterable-mapper';
-import { promisify } from 'util';
-const sleep = promisify(setTimeout);
+async function sleep<T = void>(ms: number, value?: T): Promise<T> {
+  return new Promise<T>((resolve) => setTimeout(() => resolve(value as T), ms));
+}
 
 async function mapper({ value, ms }: { value: number; ms: number }): Promise<number> {
   await sleep(ms);
@@ -55,6 +56,19 @@ class ThrowingIterator implements AsyncIterable<number> {
         return item;
       },
     };
+  }
+}
+
+async function withVirtualTime(test: () => Promise<void>): Promise<void> {
+  jest.useFakeTimers();
+  try {
+    const result = test();
+    // Observe early failures while the virtual clock drives pending work.
+    void result.catch(() => undefined);
+    await jest.runAllTimersAsync();
+    await result;
+  } finally {
+    jest.useRealTimers();
   }
 }
 
@@ -214,37 +228,39 @@ describe('IterableMapper', () => {
     });
 
     it('right number run in parallel - simple', async () => {
-      const startTime = Date.now();
-      const max = 8;
-      const delayBetweenMs = 200;
-      const input = [
-        { value: 1, ms: delayBetweenMs },
-        { value: 2, ms: delayBetweenMs },
-        { value: 3, ms: delayBetweenMs },
-        { value: 4, ms: delayBetweenMs },
-        { value: 5, ms: delayBetweenMs },
-        { value: 6, ms: delayBetweenMs },
-        { value: 7, ms: delayBetweenMs },
-        { value: 8, ms: delayBetweenMs },
-      ];
-      const prefetcher = new IterableMapper(input, mapper, { concurrency: 2, maxUnread: 4 });
+      await withVirtualTime(async () => {
+        const startTime = Date.now();
+        const max = 8;
+        const delayBetweenMs = 200;
+        const input = [
+          { value: 1, ms: delayBetweenMs },
+          { value: 2, ms: delayBetweenMs },
+          { value: 3, ms: delayBetweenMs },
+          { value: 4, ms: delayBetweenMs },
+          { value: 5, ms: delayBetweenMs },
+          { value: 6, ms: delayBetweenMs },
+          { value: 7, ms: delayBetweenMs },
+          { value: 8, ms: delayBetweenMs },
+        ];
+        const prefetcher = new IterableMapper(input, mapper, { concurrency: 2, maxUnread: 4 });
 
-      let lastSeen = 0;
-      let loopCount = 0;
-      for await (const item of prefetcher) {
-        loopCount++;
-        if (item > lastSeen) {
-          lastSeen = item;
+        let lastSeen = 0;
+        let loopCount = 0;
+        for await (const item of prefetcher) {
+          loopCount++;
+          if (item > lastSeen) {
+            lastSeen = item;
+          }
         }
-      }
 
-      expect(loopCount).toBe(max);
-      expect(lastSeen).toBe(max);
-      // Should require at least 2 batches
-      expect(Date.now() - startTime).toBeLessThan(5 * delayBetweenMs);
-      expect(Date.now() - startTime).toBeGreaterThan(4 * delayBetweenMs);
-      // The runners should never stop because the items are consumed immediately
-      expect(startAnotherRunnerSpy).toHaveBeenCalledTimes(0);
+        expect(loopCount).toBe(max);
+        expect(lastSeen).toBe(max);
+        // Should require at least 2 batches
+        expect(Date.now() - startTime).toBeLessThan(5 * delayBetweenMs);
+        expect(Date.now() - startTime).toBeGreaterThanOrEqual(4 * delayBetweenMs);
+        // The runners should never stop because the items are consumed immediately
+        expect(startAnotherRunnerSpy).toHaveBeenCalledTimes(0);
+      });
     });
 
     // T0    - Mapping - Start 1, 2, waiting 200 ms
@@ -296,44 +312,46 @@ describe('IterableMapper', () => {
     // T2300 - Iterate - Finished 7
     //         Q: []
     it('right number run in parallel - delay in reading', async () => {
-      const startTime = Date.now();
-      const max = 7;
-      const mapDelayMs = 200;
-      const readDelayMs = 300;
-      const input = [
-        { value: 1, ms: mapDelayMs },
-        { value: 2, ms: mapDelayMs },
-        { value: 3, ms: mapDelayMs },
-        { value: 4, ms: mapDelayMs },
-        { value: 5, ms: mapDelayMs },
-        { value: 6, ms: mapDelayMs },
-        { value: 7, ms: mapDelayMs },
-      ];
+      await withVirtualTime(async () => {
+        const startTime = Date.now();
+        const max = 7;
+        const mapDelayMs = 200;
+        const readDelayMs = 300;
+        const input = [
+          { value: 1, ms: mapDelayMs },
+          { value: 2, ms: mapDelayMs },
+          { value: 3, ms: mapDelayMs },
+          { value: 4, ms: mapDelayMs },
+          { value: 5, ms: mapDelayMs },
+          { value: 6, ms: mapDelayMs },
+          { value: 7, ms: mapDelayMs },
+        ];
 
-      const prefetcher = new IterableMapper(input, mapper, { concurrency: 2, maxUnread: 4 });
+        const prefetcher = new IterableMapper(input, mapper, { concurrency: 2, maxUnread: 4 });
 
-      let lastSeen = 0;
-      let loopCount = 0;
-      for await (const item of prefetcher) {
-        loopCount++;
-        if (item > lastSeen) {
-          lastSeen = item;
+        let lastSeen = 0;
+        let loopCount = 0;
+        for await (const item of prefetcher) {
+          loopCount++;
+          if (item > lastSeen) {
+            lastSeen = item;
+          }
+          await sleep(readDelayMs);
         }
-        await sleep(readDelayMs);
-      }
 
-      expect(loopCount).toBe(max);
-      expect(lastSeen).toBe(max);
-      // 1st we wait 1 mapDelayMs for the 1st item to be ready
-      // Then, as we iterate the mapped items, we wait readDelayMs for "processing"
-      // This means that all the subsequent mapper calls never delay us because the
-      // prefetch queue is always full.
-      // Because of the prime numbers (2, 3, and 7) we know that we didn't accidentally
-      // cause delays of a multiple of the wrong number.
-      expect(Date.now() - startTime).toBeGreaterThan(mapDelayMs + max * readDelayMs);
+        expect(loopCount).toBe(max);
+        expect(lastSeen).toBe(max);
+        // 1st we wait 1 mapDelayMs for the 1st item to be ready
+        // Then, as we iterate the mapped items, we wait readDelayMs for "processing"
+        // This means that all the subsequent mapper calls never delay us because the
+        // prefetch queue is always full.
+        // Because of the prime numbers (2, 3, and 7) we know that we didn't accidentally
+        // cause delays of a multiple of the wrong number.
+        expect(Date.now() - startTime).toBeGreaterThanOrEqual(mapDelayMs + max * readDelayMs);
 
-      expect(sourceNextSpy).toHaveBeenCalledTimes(max + 1);
-      expect(startAnotherRunnerSpy).toHaveBeenCalledTimes(3);
+        expect(sourceNextSpy).toHaveBeenCalledTimes(max + 1);
+        expect(startAnotherRunnerSpy).toHaveBeenCalledTimes(3);
+      });
     });
   });
 

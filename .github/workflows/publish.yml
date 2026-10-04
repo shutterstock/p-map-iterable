@@ -4,11 +4,16 @@ on:
   release:
     types: [published]
 
+permissions:
+  contents: read
+
 jobs:
   install-deps:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/configure-nodejs
         with:
           lookup-only: 'true' # We only want to lookup from the cache - if a hit, this job does nothing
@@ -19,7 +24,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - uses: ./.github/actions/configure-nodejs
 
@@ -37,8 +44,10 @@ jobs:
         run: npm run test
 
       - name: NPM registry authentication
+        env:
+          NPM_PUBLISH_TOKEN: ${{ secrets.NPMJSORG_PUBLISH_TOKEN }}
         run: |
-          npm set //registry.npmjs.org/:_authToken ${{ secrets.NPMJSORG_PUBLISH_TOKEN }}
+          npm set //registry.npmjs.org/:_authToken "$NPM_PUBLISH_TOKEN"
           npm config set @shutterstock:registry https://registry.npmjs.org/
 
       - name: Publish with CLI to NPM

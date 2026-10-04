@@ -15,15 +15,20 @@ runs:
       shell: bash
       if: github.event_name == 'pull_request'
       id: parse
+      env:
+        LCOV_FILE: ${{ inputs.lcov-file }}
       run: |
-        ./.github/actions/coverage-report/scripts/parse-coverage.js ${{ inputs.lcov-file }} > coverage-summary.txt
-        echo "coverage-summary<<EOF" >> $GITHUB_OUTPUT
-        cat coverage-summary.txt >> $GITHUB_OUTPUT
-        echo "EOF" >> $GITHUB_OUTPUT
+        ./.github/actions/coverage-report/scripts/parse-coverage.js "$LCOV_FILE" > coverage-summary.txt
+        delimiter="$(uuidgen)"
+        {
+          echo "coverage-summary<<$delimiter"
+          cat coverage-summary.txt
+          echo "$delimiter"
+        } >> "$GITHUB_OUTPUT"
 
     - name: Find Coverage Comment
       if: github.event_name == 'pull_request'
-      uses: peter-evans/find-comment@v4
+      uses: peter-evans/find-comment@b30e6a3c0ed37e7c023ccd3f1db5c6c0b0c23aad # v4
       id: fc
       with:
         issue-number: ${{ github.event.pull_request.number }}
@@ -31,7 +36,7 @@ runs:
         body-includes: '### 📊 ${{ inputs.title }}'
 
     - name: Post Coverage Comment
-      uses: peter-evans/create-or-update-comment@v5
+      uses: peter-evans/create-or-update-comment@e8674b075228eee787fea43ef493e45ece1004c9 # v5
       with:
         comment-id: ${{ steps.fc.outputs.comment-id }}
         edit-mode: replace
@@ -42,7 +47,7 @@ runs:
 
     - name: Upload Coverage Report
       if: github.event_name == 'pull_request'
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
       with:
         name: coverage-report
         path: coverage/

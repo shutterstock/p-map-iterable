@@ -6,11 +6,16 @@ on:
 
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   install-deps:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/configure-nodejs
         with:
           lookup-only: 'true' # We only want to lookup from the cache - if a hit, this job does nothing
@@ -19,9 +24,13 @@ jobs:
     needs:
       - install-deps
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # Deploy generated documentation to gh-pages.
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - uses: ./.github/actions/configure-nodejs
 
@@ -29,7 +38,7 @@ jobs:
         run: npm run build:docs
 
       - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v4
+        uses: peaceiris/actions-gh-pages@84c30a85c19949d7eee79c4ff27748b70285e453 # v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./docs

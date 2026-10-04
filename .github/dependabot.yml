@@ -1,0 +1,54 @@
+version: 2
+
+updates:
+  # The npm ecosystem also supports pnpm if the package manager changes.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '09:00'
+      timezone: America/New_York
+    open-pull-requests-limit: 5
+    labels: []
+    versioning-strategy: increase-if-necessary
+    commit-message:
+      prefix: chore
+      include: scope
+    # Match PwrGit/PwrAgent's seven-day supply-chain window. Security updates
+    # bypass cooldown; major version updates get more time and individual PRs.
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
+    groups:
+      production-minor-patch:
+        dependency-type: production
+        patterns: ['*']
+        update-types: [minor, patch]
+      development-minor-patch:
+        dependency-type: development
+        patterns: ['*']
+        update-types: [minor, patch]
+      security-updates:
+        applies-to: security-updates
+        patterns: ['*']
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: tuesday
+      time: '09:00'
+      timezone: America/New_York
+    open-pull-requests-limit: 3
+    labels: []
+    commit-message:
+      prefix: chore
+      include: scope
+    cooldown:
+      default-days: 7
+    # Actions are pinned to commits, so minor/patch updates also need PRs.
+    groups:
+      actions-minor-patch:
+        patterns: ['*']
+        update-types: [minor, patch]

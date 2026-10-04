@@ -265,7 +265,7 @@ pnpm run example:semantic-aliases
 ```
 
 The pnpm configuration requires package releases to be at least seven days old.
-On macOS, `packageImportMethod: clone` uses APFS copy-on-write clones from the
+On macOS, `packageImportMethod: auto` prefers APFS copy-on-write clones from the
 shared pnpm store, so worktrees share package data until a file changes. Keep the
 store on the same APFS volume as the checkout. Other supported filesystems use
 pnpm's available import method.

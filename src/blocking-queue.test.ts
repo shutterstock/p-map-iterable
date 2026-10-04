@@ -70,7 +70,7 @@ describe('BlockingQueue', () => {
       }, 1000);
       const item = await queue.dequeue();
       queue.done();
-      await expect(async () => queue.enqueue(2)).rejects.toThrowError(
+      await expect(async () => queue.enqueue(2)).rejects.toThrow(
         '`enqueue` called after `done` called',
       );
       expect(item).toBe(1);
@@ -97,20 +97,17 @@ describe('BlockingQueue', () => {
 
     it('full queue blocks enqueue until dequeue', async () => {
       const queue = new BlockingQueue<number>({ maxUnread: 1 });
-
-      // Add first item
-      void queue.enqueue(1);
-      // Do not wait for second item to add (it will wait until an enqueue completes)
-      setTimeout(() => {
-        void queue.enqueue(2);
-      }, 2000);
-
-      const startTime = Date.now();
+      await queue.enqueue(1);
+      let admitted = false;
+      const write = queue.enqueue(2).then(() => {
+        admitted = true;
+      });
+      await Promise.resolve();
+      expect(admitted).toBe(false);
       expect(await queue.dequeue()).toBe(1);
-      expect(Date.now() - startTime).toBeLessThan(2000);
+      await write;
+      expect(admitted).toBe(true);
       expect(await queue.dequeue()).toBe(2);
-      expect(Math.ceil(Math.ceil(Date.now() - startTime))).toBeGreaterThanOrEqual(2000);
-
       queue.done();
     });
   });
@@ -149,7 +146,7 @@ describe('BlockingQueue', () => {
       await queue.enqueue(1);
       const item = await queue.dequeue();
       queue.done();
-      await expect(async () => queue.enqueue(2)).rejects.toThrowError(
+      await expect(async () => queue.enqueue(2)).rejects.toThrow(
         '`enqueue` called after `done` called',
       );
       expect(item).toBe(1);
@@ -199,20 +196,17 @@ describe('BlockingQueue', () => {
 
     it('full queue blocks enqueue until dequeue', async () => {
       const queue = new BlockingQueue<number>({ maxUnread: 1 });
-
-      // Wait for first item to add
       await queue.enqueue(1);
-      // Do not wait for second item to add (it will wait until an enqueue completes)
-      setTimeout(() => {
-        void queue.enqueue(2);
-      }, 2000);
-
+      let admitted = false;
+      const write = queue.enqueue(2).then(() => {
+        admitted = true;
+      });
+      await Promise.resolve();
+      expect(admitted).toBe(false);
       expect(await queue.dequeue()).toBe(1);
-      const startTime = Date.now();
+      await write;
+      expect(admitted).toBe(true);
       expect(await queue.dequeue()).toBe(2);
-      const duration = Math.ceil(Date.now() - startTime);
-      expect(duration).toBeGreaterThanOrEqual(2000);
-
       queue.done();
     });
   });

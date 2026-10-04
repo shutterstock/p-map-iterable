@@ -63,13 +63,11 @@ export class BlockingQueue<Element> {
     }
 
     // Validate maxUnread option
-    if (
-      !(
-        (Number.isSafeInteger(this._options.maxUnread) ||
-          this._options.maxUnread === Number.POSITIVE_INFINITY) &&
-        this._options.maxUnread >= 0
-      )
-    ) {
+    if (!(
+      (Number.isSafeInteger(this._options.maxUnread) ||
+        this._options.maxUnread === Number.POSITIVE_INFINITY) &&
+      this._options.maxUnread >= 0
+    )) {
       throw new TypeError(
         `Expected \`maxUnread\` to be an integer from 0 and up or \`Infinity\`, got \`${maxUnread}\` (${typeof maxUnread})`,
       );

@@ -52,7 +52,7 @@ describe('Queue', () => {
 
     const inputCount = input.length;
     let loopCount = 0;
-    // eslint-disable-next-line no-constant-condition
+
     while (true) {
       const item = q.dequeue();
 

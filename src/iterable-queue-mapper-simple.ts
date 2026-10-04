@@ -81,7 +81,6 @@ export class IterableQueueMapperSimple<Element> {
   }
 
   private async discardResults(): Promise<void> {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     let item = await this._writer.next();
     while (item.done !== true) {
       // Just discard all the results

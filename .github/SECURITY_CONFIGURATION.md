@@ -43,6 +43,9 @@ There is no automatic merge policy.
 External actions are pinned to complete commit hashes. Dependabot must continue
 to propose minor and patch updates because those hashes do not move when an
 upstream release tag changes.
+The Actions update configuration explicitly includes both local composite-action
+directories in addition to the root workflow scan. Add any new composite-action
+directory to the same list so its pinned dependencies also receive updates.
 
 Dependency review fails on newly introduced high or critical vulnerabilities
 in runtime, development, or unknown dependency scopes. It does not replace

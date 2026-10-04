@@ -34,7 +34,11 @@ updates:
         patterns: ['*']
 
   - package-ecosystem: github-actions
-    directory: /
+    # The root scan does not follow local composite-action references.
+    directories:
+      - /
+      - /.github/actions/configure-nodejs
+      - /.github/actions/coverage-report
     schedule:
       interval: weekly
       day: tuesday

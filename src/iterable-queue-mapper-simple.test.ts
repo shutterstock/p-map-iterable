@@ -120,7 +120,7 @@ describe('IterableQueueMapperSimple', () => {
     expect(Date.now() - startTime).toBeGreaterThanOrEqual(2 * sleepDurationMs);
     expect(Date.now() - startTime).toBeLessThan(2.2 * sleepDurationMs);
 
-    expect(mapper).toBeCalledTimes(5);
+    expect(mapper).toHaveBeenCalledTimes(5);
 
     expect(backgroundWriter.errors.length).toBe(0);
   });

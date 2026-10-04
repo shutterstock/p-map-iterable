@@ -1,7 +1,7 @@
 /* eslint-disable no-console */
 import { IterableQueueMapper } from '@shutterstock/p-map-iterable';
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const AggregateError = require('aggregate-error');
+
+import AggregateError from 'aggregate-error';
 import { promisify } from 'util';
 const sleep = promisify(setTimeout);
 

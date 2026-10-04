@@ -104,7 +104,7 @@ describe('IterableQueue', () => {
       await queue.enqueue(1);
       const item = await queue.dequeue();
       queue.done();
-      await expect(async () => queue.enqueue(2)).rejects.toThrowError(
+      await expect(async () => queue.enqueue(2)).rejects.toThrow(
         '`enqueue` called after `done` called',
       );
       expect(item).toBe(1);

@@ -196,8 +196,8 @@ describe('IterableMapper', () => {
       }
 
       // Wait for all the readers to resolve
-      await Promise.all(nextPromises);
-      for await (const item of nextPromises) {
+      const nextResults = await Promise.all(nextPromises);
+      for (const item of nextResults) {
         if (item.done === true) {
           break;
         }
@@ -309,8 +309,6 @@ describe('IterableMapper', () => {
         { value: 6, ms: mapDelayMs },
         { value: 7, ms: mapDelayMs },
       ];
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
 
       const prefetcher = new IterableMapper(input, mapper, { concurrency: 2, maxUnread: 4 });
 
@@ -532,7 +530,7 @@ describe('IterableMapper', () => {
           loopCount++;
           iteratedValues.push(value);
         }
-      }).rejects.toThrowError('throw on 1st');
+      }).rejects.toThrow('throw on 1st');
       await sleep(500);
       expect(loopCount).toBe(0);
       expect(mappedValues).toEqual([1]);
@@ -563,7 +561,7 @@ describe('IterableMapper', () => {
           loopCount++;
           iteratedValues.push(value);
         }
-      }).rejects.toThrowError('throw on 2nd');
+      }).rejects.toThrow('throw on 2nd');
       await sleep(300);
       expect(loopCount).toBe(1);
       expect(mappedValues).toEqual([1, 2]);
@@ -594,7 +592,7 @@ describe('IterableMapper', () => {
           loopCount++;
           iteratedValues.push(value);
         }
-      }).rejects.toThrowError('throw on 1st');
+      }).rejects.toThrow('throw on 1st');
       await sleep(300);
       expect(loopCount).toBe(2);
       expect(mappedValues).toEqual([1, 2, 3]);
@@ -625,7 +623,7 @@ describe('IterableMapper', () => {
           loopCount++;
           iteratedValues.push(value);
         }
-      }).rejects.toThrowError('throw on 2nd');
+      }).rejects.toThrow('throw on 2nd');
       await sleep(300);
       expect(loopCount).toBe(2);
       expect(mappedValues).toEqual([1, 2, 3]);
@@ -650,7 +648,7 @@ describe('IterableMapper', () => {
           loopCount++;
           iteratedValues.push(value);
         }
-      }).rejects.toThrowError('throw on each');
+      }).rejects.toThrow('throw on each');
       expect(loopCount).toBe(0);
       expect(mappedValues).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
       expect(iteratedValues).toEqual([]);
@@ -674,7 +672,7 @@ describe('IterableMapper', () => {
           loopCount++;
           iteratedValues.push(value);
         }
-      }).rejects.toThrowError('throw on each');
+      }).rejects.toThrow('throw on each');
       expect(loopCount).toBe(0);
       expect(mappedValues).toEqual([1]);
       expect(iteratedValues).toEqual([]);
@@ -699,7 +697,7 @@ describe('IterableMapper', () => {
           loopCount++;
           iteratedValues.push(value);
         }
-      }).rejects.toThrowError('throwing on index 0');
+      }).rejects.toThrow('throwing on index 0');
       await sleep(500);
       expect(loopCount).toBe(0);
       expect(mappedValues).toEqual([]);
@@ -728,7 +726,7 @@ describe('IterableMapper', () => {
           loopCount++;
           iteratedValues.push(value);
         }
-      }).rejects.toThrowError('throwing on index 1');
+      }).rejects.toThrow('throwing on index 1');
       await sleep(500);
       expect(loopCount).toBe(1);
       expect(mappedValues).toEqual([0]);
@@ -763,7 +761,7 @@ describe('IterableMapper', () => {
           loopCount++;
           iteratedValues.push(value);
         }
-      }).rejects.toThrowError('throw on 1st');
+      }).rejects.toThrow('throw on 1st');
       await sleep(500);
       expect(loopCount).toBe(0);
       expect(mappedValues).toEqual([1, 2]);
@@ -794,7 +792,7 @@ describe('IterableMapper', () => {
           loopCount++;
           iteratedValues.push(value);
         }
-      }).rejects.toThrowError('throw on 2nd');
+      }).rejects.toThrow('throw on 2nd');
       await sleep(300);
       expect(loopCount).toBe(2);
       expect(mappedValues).toEqual([1, 3, 2]);
@@ -825,7 +823,7 @@ describe('IterableMapper', () => {
           loopCount++;
           iteratedValues.push(value);
         }
-      }).rejects.toThrowError('throw on 1st');
+      }).rejects.toThrow('throw on 1st');
       await sleep(300);
       expect(loopCount).toBe(2);
       expect(mappedValues).toEqual([1, 3, 2]);
@@ -856,7 +854,7 @@ describe('IterableMapper', () => {
           loopCount++;
           iteratedValues.push(value);
         }
-      }).rejects.toThrowError('throw on 2nd');
+      }).rejects.toThrow('throw on 2nd');
       await sleep(300);
       expect(loopCount).toBe(2);
       expect(mappedValues).toEqual([1, 3, 2]);
@@ -881,7 +879,7 @@ describe('IterableMapper', () => {
           loopCount++;
           iteratedValues.push(value);
         }
-      }).rejects.toThrowError('throw on each');
+      }).rejects.toThrow('throw on each');
       expect(loopCount).toBe(0);
       expect(mappedValues).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
       expect(iteratedValues).toEqual([]);
@@ -905,7 +903,7 @@ describe('IterableMapper', () => {
           loopCount++;
           iteratedValues.push(value);
         }
-      }).rejects.toThrowError('throw on each');
+      }).rejects.toThrow('throw on each');
       expect(loopCount).toBe(0);
       expect(mappedValues).toEqual([1]);
       expect(iteratedValues).toEqual([]);
@@ -930,7 +928,7 @@ describe('IterableMapper', () => {
           loopCount++;
           iteratedValues.push(value);
         }
-      }).rejects.toThrowError('throwing on index 0');
+      }).rejects.toThrow('throwing on index 0');
       await sleep(500);
       expect(loopCount).toBe(0);
       expect(mappedValues).toEqual([]);
@@ -959,7 +957,7 @@ describe('IterableMapper', () => {
           loopCount++;
           iteratedValues.push(value);
         }
-      }).rejects.toThrowError('throwing on index 1');
+      }).rejects.toThrow('throwing on index 1');
       await sleep(500);
       expect(loopCount).toBe(1);
       expect(mappedValues).toEqual([0]);
@@ -994,7 +992,7 @@ describe('IterableMapper', () => {
           loopCount++;
           iteratedValues.push(value);
         }
-      }).rejects.toThrowError('throw on 1st');
+      }).rejects.toThrow('throw on 1st');
       await sleep(500);
       expect(loopCount).toBe(1);
       expect(mappedValues).toEqual([1, 3, 2]);
@@ -1035,7 +1033,7 @@ describe('IterableMapper', () => {
           loopCount++;
           iteratedValues.push(value);
         }
-      }).rejects.toThrowError('throw on 2nd');
+      }).rejects.toThrow('throw on 2nd');
       await sleep(300);
       expect(loopCount).toBe(2);
       expect(mappedValues).toEqual([1, 3, 2]);
@@ -1091,7 +1089,7 @@ describe('IterableMapper', () => {
           loopCount++;
           iteratedValues.push(value);
         }
-      }).rejects.toThrowError('throw on each');
+      }).rejects.toThrow('throw on each');
       expect(loopCount).toBe(0);
       expect(mappedValues).toEqual([1]);
       expect(iteratedValues).toEqual([]);
@@ -1115,7 +1113,7 @@ describe('IterableMapper', () => {
           loopCount++;
           iteratedValues.push(value);
         }
-      }).rejects.toThrowError('throw on each');
+      }).rejects.toThrow('throw on each');
       expect(loopCount).toBe(0);
       expect(mappedValues).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
       expect(iteratedValues).toEqual([]);

@@ -94,11 +94,28 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Preserve configured npm for the older runtime
+        id: runtime-npm
+        run: |
+          mkdir -p "$RUNNER_TEMP/runtime-npm"
+          ln -s "$(command -v npm)" "$RUNNER_TEMP/runtime-npm/npm"
+          ln -s "$(command -v npx)" "$RUNNER_TEMP/runtime-npm/npx"
+          echo "version=$(npm --version)" >> "$GITHUB_OUTPUT"
+
       - name: Select older runtime after installing and building on Node 24
         uses: actions/setup-node@v7
         with:
           node-version: '22.13.0'
           package-manager-cache: false
+
+      - name: Retain npm version and release-age policy with the older runtime
+        env:
+          EXPECTED_NPM_VERSION: ${{ steps.runtime-npm.outputs.version }}
+        run: |
+          echo "$RUNNER_TEMP/runtime-npm" >> "$GITHUB_PATH"
+          export PATH="$RUNNER_TEMP/runtime-npm:$PATH"
+          test "$(npm --version)" = "$EXPECTED_NPM_VERSION"
+          test "$(npm config get min-release-age)" = '7'
 
       - name: Test
         run: npm run test

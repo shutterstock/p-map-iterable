@@ -33,9 +33,10 @@ Dependabot entries when that branch is cut.
 
 1. Merge and validate the intended release commit on `main` or its maintenance
    branch. Builds, dependency installation, documentation, and publishing use
-   Node 24 with npm 10.9.4, matching the dependency refresh's validated resolver.
+   Node 24 with npm 11.19.1 and `min-release-age=7`, matching the local policy.
    An additional CI lane installs and builds on Node 24, then runs tests
-   on Node 22.13. Both CI lanes and publication run `test:package` when that script
+   on Node 22.13 while retaining npm 11.19.1 and the same release-age policy.
+   Both CI lanes and publication run `test:package` when that script
    exists, including the planned 2.x package consumer fixtures.
 2. Create a new tag named `release/vX.Y.Z`, or `release/vX.Y.Z-beta.1` for a
    candidate, at that commit. Lightweight and annotated tags are supported.
@@ -142,8 +143,18 @@ container actions. These workflows use hosted Ubuntu runners and no container
 actions for authenticated Git operations.
 
 Setup-node's automatic npm caching is explicitly disabled. The existing
-node_modules cache, its Node/npm/OS/architecture/lockfile key, and lookup-only
+node_modules cache, its Node/npm/release-age/OS/architecture/lockfile key, and lookup-only
 behavior remain authoritative even if a future manifest declares `packageManager`.
+
+The Node setup action sets npm's seven-day minimum release age for npm bootstrap
+and dependency installation, and persists it for later npm install/update commands
+in the same job. Dependency updates and regenerated lockfiles must select the
+newest release eligible under that policy. The earlier fresh-resolution
+`ERESOLVE` was caused by the release-age policy excluding recent releases, not an
+npm resolver defect. Do not disable the policy or use an older npm to evade it.
+Existing resolved lockfile entries can be exempt from the minimum age during
+`npm ci`; a successful locked install does not prove fresh dependency resolution
+honored the policy. Regenerate locks with npm 11.19.1 and the policy enabled.
 
 ## Local validation
 

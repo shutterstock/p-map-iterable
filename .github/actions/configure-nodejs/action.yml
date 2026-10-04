@@ -7,7 +7,7 @@ inputs:
     default: '24'
   npm-version:
     description: 'npm version used to install and publish with the validated lockfile'
-    default: '10.9.4'
+    default: '11.19.1'
   registry-url:
     description: 'Optional npm registry for token authentication via NODE_AUTH_TOKEN'
     default: ''
@@ -30,7 +30,10 @@ runs:
       shell: bash
       env:
         NPM_VERSION: ${{ inputs.npm-version }}
-      run: npm install --global "npm@$NPM_VERSION" --ignore-scripts
+        NPM_CONFIG_MIN_RELEASE_AGE: '7'
+      run: |
+        npm install --global "npm@$NPM_VERSION" --ignore-scripts
+        npm config set min-release-age 7 --location=user
 
     - name: Restore Node Modules from Cache
       id: cache-node-modules
@@ -40,10 +43,12 @@ runs:
           node_modules
           packages/**/node_modules
           !node_modules/.cache
-        key: node-modules-${{ inputs.node-version }}-npm-${{ inputs.npm-version }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package.json', 'package-lock.json', '**/package-lock.json') }}
+        key: node-modules-${{ inputs.node-version }}-npm-${{ inputs.npm-version }}-min-age-7-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package.json', 'package-lock.json', '**/package-lock.json') }}
         lookup-only: ${{ inputs.lookup-only }}
 
     - name: Install dependencies
       if: steps.cache-node-modules.outputs.cache-hit != 'true'
       shell: bash
+      env:
+        NPM_CONFIG_MIN_RELEASE_AGE: '7'
       run: npm ci

@@ -41,7 +41,7 @@ async function main() {
   let queuedButUnreadFileSizeGB = 0;
   let callCount = 0;
 
-  // Create an item prefetcher with IterableMapper
+  // Create a prefetching mapper with IterableMapper (also exported as ConcurrentMapper)
   // Use `npm i it-batch`'s `batch` function to batch the source iterable
   // into batches of a specific size, such as 50, if making batch requests
   // to a remote service.

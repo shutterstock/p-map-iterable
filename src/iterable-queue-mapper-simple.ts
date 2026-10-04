@@ -7,23 +7,26 @@ type Errors<T> = { item: T; error: string | { [key: string]: any } | Error }[];
 const NoResult = Symbol('noresult');
 
 /**
- * Options for IterableQueueMapperSimple
+ * Options for `IterableQueueMapperSimple`, also exported as `WorkerQueueOptions`.
  */
 export type IterableQueueMapperSimpleOptions = Pick<IterableMapperOptions, 'concurrency'>;
 
 /**
  * Accepts queue items via `enqueue` and calls the `mapper` on them
  * with specified `concurrency`, discards the results, and accumulates
- * exceptions in the `errors` property.  When empty, `await enqueue()`
- * will return immediately, but when `concurrency` items are in progress,
- * `await enqueue()` will block until a slot is available to accept the item.
+ * exceptions in the `errors` property. Await `enqueue()` for producer
+ * backpressure while the worker callback runs asynchronously.
+ *
+ * Also exported as `WorkerQueue`, with the same constructor and instance types.
+ * Each input uses the same worker callback supplied at construction. Asynchronous
+ * work overlaps in the current JavaScript process, and results are consumed internally.
  *
  * @remarks
  *
- * ### Typical Use Case
- * - Pushing items to an async I/O destination
- * - In the simple sequential (`concurrency: 1`) case, allows 1 item to be flushed async while caller prepares next item
- * - Results of the flushed items are not needed in a subsequent step (if they are, use `IterableQueueMapper`)
+ * ### Typical Use Cases
+ * - Running background status checks or other queued work through a fixed callback
+ * - Sending items to an async I/O destination
+ * - Processing items whose return values can be discarded (if results are needed, use `IterableQueueMapper` / `MappingQueue`)
  *
  * ### Error Handling
  *   The mapper should ideally handle all errors internally to enable error handling
@@ -33,7 +36,7 @@ export type IterableQueueMapperSimpleOptions = Pick<IterableMapperOptions, 'conc
  *   - Errors can be checked/handled during processing via the `errors` property
  *
  *   Key Differences from `IterableQueueMapper`:
- *   - `maxUnread` defaults to equal `concurrency` (simplifying queue management)
+ *   - The internal `maxUnread` limit equals `concurrency`; only `concurrency` is configurable
  *   - Results are automatically iterated and discarded (all work should happen in mapper)
  *   - Errors are collected rather than thrown (available via errors property)
  *
@@ -41,7 +44,11 @@ export type IterableQueueMapperSimpleOptions = Pick<IterableMapperOptions, 'conc
  * - Items are added to the queue via the `await enqueue()` method
  * - Check `errors` property to see if any errors occurred, stop if desired
  * - IMPORTANT: `await enqueue()` method will block until a slot is available, if queue is full
- * - IMPORTANT: Always `await onIdle()` to ensure all items are processed
+ * - After the last awaited enqueue, await `onIdle()` to close input permanently and finish accepted work
+ * - Subsequent enqueues reject, so `onIdle()` is a final shutdown operation
+ * - Worker failures are collected in `errors`; they do not reject `onIdle()`
+ * - Await each enqueue for producer backpressure; unawaited calls can accumulate pending inputs
+ * - Admission limits for event callbacks, cancellation, and per-item completion handles belong to the caller
  *
  * Note: the name is somewhat of a misnomer as this wraps `IterableQueueMapper`
  * but is not itself an `Iterable`.
@@ -100,7 +107,7 @@ export class IterableQueueMapperSimple<Element> {
   }
 
   /**
-   * Accumulated errors from background `mappers`s
+   * Accumulated errors from the worker callback.
    *
    * @remarks
    *
@@ -116,27 +123,27 @@ export class IterableQueueMapperSimple<Element> {
   }
 
   /**
-   * Accept a request for sending in the background if a concurrency slot is available.
-   * Else, do not return until a concurrency slot is freed up.
-   * This provides concurrency background writes with backpressure to prevent
-   * the caller from getting too far ahead.
+   * Accept an input for the worker callback, waiting until it can be accepted.
+   * Resolves on acceptance, rather than completion of this item's work.
+   * Await each enqueue for producer backpressure.
    *
-   * MUST await `onIdle` for background `mappers`s to finish
-   * @param item
+   * After the last enqueue, await `onIdle()` to close input and finish accepted work.
+   * @param item Input for the worker callback
    */
   public async enqueue(item: Element): Promise<void> {
-    // Return immediately or wait for a slot to free up in the background writer
+    // Return immediately or wait for the underlying mapping queue to accept the input
     await this._writer.enqueue(item);
   }
 
   /**
-   * Wait for all background `mapper`s to finish.
-   * MUST be called before exit to ensure no lost writes.
+   * Permanently close input and wait for all accepted work to finish.
+   * Call after the last awaited enqueue. Subsequent enqueues reject.
+   * Worker failures are available in `errors` instead of rejecting this wait.
    */
   public async onIdle(): Promise<void> {
     if (this._isIdle) return;
 
-    // Indicate that we're done writing requests
+    // Indicate that no more inputs will be enqueued
     this._writer.done();
 
     await this._done;
@@ -145,9 +152,9 @@ export class IterableQueueMapperSimple<Element> {
   }
 
   /**
-   * Indicates if all background `mapper`s have finished.
+   * Indicates whether final shutdown has completed.
    *
-   * @returns true if .onIdle() has been called and finished all background writes
+   * @returns true after `onIdle()` has finished all accepted work and closed input
    */
   public get isIdle(): boolean {
     return this._isIdle;

@@ -10,11 +10,11 @@ import { Queue } from './queue';
 
 export {
   IterableMapper,
-  IterableMapper as Prefetcher,
+  IterableMapper as ConcurrentMapper,
   IterableQueueMapper,
-  IterableQueueMapper as BackgroundFlusher,
+  IterableQueueMapper as MappingQueue,
   IterableQueueMapperSimple,
-  IterableQueueMapperSimple as SimpleBackgroundFlusher,
+  IterableQueueMapperSimple as WorkerQueue,
   BlockingQueue,
   IterableQueue,
   Queue,
@@ -23,11 +23,11 @@ export {
 export type {
   Mapper,
   IterableMapperOptions,
-  IterableMapperOptions as PrefetcherOptions,
+  IterableMapperOptions as ConcurrentMapperOptions,
   IterableQueueMapperOptions,
-  IterableQueueMapperOptions as BackgroundFlusherOptions,
+  IterableQueueMapperOptions as MappingQueueOptions,
   IterableQueueMapperSimpleOptions,
-  IterableQueueMapperSimpleOptions as SimpleBackgroundFlusherOptions,
+  IterableQueueMapperSimpleOptions as WorkerQueueOptions,
   BlockingQueueOptions,
   IterableQueueOptions,
 };

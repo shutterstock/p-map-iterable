@@ -43,7 +43,7 @@ async function main() {
   let queuedButUnreadFileSizeGB = 0;
   let callCount = 0;
 
-  // Create an item prefetcher with IterableQueueMapper
+  // Create a queued prefetching mapper with IterableQueueMapper (also exported as MappingQueue)
   const prefetcher = new IterableQueueMapper(
     async (value: {
       fileName: string;
@@ -76,7 +76,7 @@ async function main() {
 
   let loopCount = 0;
 
-  // Add items to the queue in the background
+  // Add inputs in the background while the consumer below drains the result buffer
   const jobAdder = (async () => {
     for await (const item of iterator) {
       console.log(`Enqueue Start FileName: ${item.fileName}, FileSizeGB: ${item.fileSizeGB}`);
@@ -131,7 +131,7 @@ async function main() {
   }
 
   // Wait for the job adder to finish adding the jobs
-  // (it's throughput is constrained by the prefetcher's concurrency)
+  // (its throughput is constrained by the mapper concurrency)
   await jobAdder;
 
   console.log(`QueuedButUnreadFileSizeGB: ${queuedButUnreadFileSizeGB}`);

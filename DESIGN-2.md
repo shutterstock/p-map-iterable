@@ -1,6 +1,6 @@
 # 2.x TaskQueue design and migration
 
-Status: implemented for review on the 2.x branch. Complete the updated 1.1.x release and cut `releases/1.1` before any 2.x merge. Dependency, module-format and legacy iterator corrections have separate owners. This change preserves the existing iterable classes and does not claim to fix their separate correctness findings.
+Status: implemented for review on the 2.x branch, based on maintenance commit `0784c65`. Complete the updated 1.1.x release and cut `releases/1.1` before any 2.x merge. Module-format changes and legacy iterator corrections have separate owners. [PR #22](https://github.com/shutterstock/p-map-iterable/pull/22) proposes the iterator fixes described below; it is not merged into this API branch. The parent will combine and validate the changes locally before deciding on merges.
 
 ## Workloads behind the design
 
@@ -83,7 +83,7 @@ A live stream can keep `onIdle()` pending indefinitely; `drain()` still provides
 
 ## Migration from 1.x
 
-Existing iterable exports and behavior remain in this PR. Use TaskQueue for new event/task code; retain `IterableMapper` for streamed result pipelines. Existing `IterableQueueMapperSimpleOptions` is now also exported from the package root for consumers typing legacy adapters.
+Existing iterable exports and behavior remain in this API PR. Use TaskQueue for new event/task code; retain `IterableMapper` for streamed result pipelines. Existing `IterableQueueMapperSimpleOptions` is now also exported from the package root for consumers typing legacy adapters. The separate proposed iterator changes in #22 add the migration requirements below.
 
 | 1.x pattern | TaskQueue equivalent | Compatibility consideration |
 | --- | --- | --- |
@@ -122,13 +122,33 @@ try {
 
 For PwrSnap's enrichment lanes, wrap the entire preparation/request/cleanup operation in a task; preserve connection-key ownership and queue-age checks in the application. A settings change should not create a second active queue with a new budget before the old lane drains. For PwrGit, keep viewport debounce and freshness maps, use cancellation handles instead of pending tombstones, and keep separate background/user lanes where those budgets are intentional. One queue per key can preserve per-repository ordering, but a global process budget requires an additional application policy; nested queues require care to avoid deadlock.
 
+### Proposed iterable cancellation changes in #22
+
+PR #22 proposes `IterableMapperOptions.signal?: AbortSignal` and a guaranteed third callback argument:
+
+```typescript
+type Mapper<Element, NewElement> = (
+  element: Element,
+  index: number,
+  signal: AbortSignal,
+) => NewElement | Promise<NewElement>;
+```
+
+Existing one- or two-argument callbacks remain assignable and can ignore the signal. **Directly invoking a function typed as `Mapper` now requires a third signal argument**; pass the operation's controller signal when calling an adapter or mapper outside the library. A callback inferred independently with only two arguments does not acquire a third required parameter merely because it is passed to the constructor. `IterableQueueMapperSimple.worker` forwards the supplied signal to its mapper in the proposal.
+
+The proposed wrapper supplies a signal even without an external signal option. Failure, `return()` and external abort request cooperative cancellation of running callbacks and detach external listeners on completion/return/failure. Queue wrappers release blocked producers on external cancellation even when results are not consumed. Mapper failure likewise rejects blocked and future enqueue calls without requiring a result consumer, preserving the exact reason including undefined. Pre-aborted signals prevent work from starting, and source cleanup runs once. The current proposed head is `c25aaef`; the parent owns final combined validation.
+
+Iterator `return()` releases pending readers and closes the source; it does **not** wait for an uncooperative running mapper to settle. Late outcomes are observed and discarded. This differs from TaskQueue `close()`, which waits for actual task settlement and cleanup. Applications requiring a full operation shutdown barrier must not treat iterator return as a TaskQueue close equivalent. These are proposed companion semantics, not features already merged or implemented in this PR's legacy mapper source.
+
 ## Implementation choices and boundaries
 
 The legacy mapper stack is useful for iterable prefetch and output flow control. Reusing it for this task interface is unsafe without a larger redesign: it eagerly stores pending inputs, lacks removable entries and reusable idle state, conflates unread-result capacity with scheduling, and has independently reproduced terminal/sentinel defects. The new scheduler uses a small insertion-ordered Map for waiting entries and a Set for running entries. Both provide immediate removal without changing existing classes. `add` is implemented on `submit`, not a second scheduler.
 
 No rate limiting, priorities, mutable concurrency, keyed locks, persistence, debounce, coalescing, retries or automatic timeouts are added. The inspected applications attach these policies to specific domains. Keeping them outside the scheduler avoids claiming generic cancellation can terminate arbitrary operations or generic draining can replace durable storage.
 
-TaskQueue does not use `aggregate-error`: each failure has its own result. Native `AggregateError` is the recommended 2.x representation when an application explicitly wants an aggregate or when the legacy continue-on-error iterator is corrected. Replacing the 3.x runtime/peer dependency and choosing ES2021 library declarations belong to the module/release workstream; no dependency or build configuration is changed here. The recommended 2.x baseline is Node.js 22+; release owners must reconcile the final engines policy, declarations and ESM/CommonJS exports.
+TaskQueue does not use `aggregate-error`: each failure has its own result. Native `AggregateError` is the recommended 2.x representation when an application explicitly wants an aggregate or when the legacy continue-on-error iterator is corrected. Replacing the 3.x runtime/peer dependency and choosing ES2021 library declarations belong to the module/release workstream. This API follow-up adds only documentation dev dependencies: TypeDoc's compatible Mermaid plugin and Mermaid itself. Packaging #20 must retain empty runtime and peer dependency sets when combining these changes. The recommended 2.x baseline is Node.js 22+; release owners must reconcile the final engines policy, declarations and ESM/CommonJS exports.
+
+Generated `docs` are excluded from TypeScript inputs. `build:docs` loads [@boneskull/typedoc-plugin-mermaid](https://github.com/boneskull/typedoc-plugin-mermaid2), whose peers support TypeDoc 0.28, and copies the installed Mermaid 11 ESM assets locally. Browser rendering therefore needs no Mermaid CDN. The original [typedoc-plugin-mermaid 1.12.0](https://github.com/kamiazya/typedoc-plugin-mermaid) targets TypeDoc 0.22–0.26; the maintained plugin documents why TypeDoc 0.27+ needs its replacement. Both light and dark SVG variants must be verified in a browser, since parsing a Mermaid fence alone cannot establish rendering.
 
 ## Prior experiments
 

@@ -1,0 +1,5 @@
+{
+  "name": "package-consumer-esm",
+  "private": true,
+  "type": "module"
+}

@@ -8,3 +8,5 @@ dist/
 coverage/
 .DS_Store
 docs/
+.package-tests-*/
+.validation-tools/

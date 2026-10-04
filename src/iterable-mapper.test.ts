@@ -5,6 +5,41 @@ async function sleep<T = void>(ms: number, value?: T): Promise<T> {
   return new Promise<T>((resolve) => setTimeout(() => resolve(value as T), ms));
 }
 
+describe('native AggregateError', () => {
+  it.each([false, true])(
+    'retains Error and primitive rejections (success: %s)',
+    async (success) => {
+      const failure = new Error('mapper failure');
+      const rejections = [failure, 'primitive failure', 0, null, undefined];
+      const input = success ? [...rejections, 42] : rejections;
+      const results: number[] = [];
+      const prefetcher = new IterableMapper(
+        input,
+        async (value): Promise<number> => {
+          if (value === 42) return value;
+          return Promise.reject(value);
+        },
+        { concurrency: 1, maxUnread: 1, stopOnMapperError: false },
+      );
+
+      let caught: unknown;
+      try {
+        for await (const value of prefetcher) results.push(value);
+      } catch (error) {
+        caught = error;
+      }
+      expect(caught).toBeInstanceOf(AggregateError);
+      const aggregate = caught as AggregateError;
+      expect(aggregate.errors).toEqual(rejections);
+      expect(aggregate.errors[0]).toBe(failure);
+      expect(aggregate.message).toContain('mapper failure');
+      expect(aggregate.message).toContain('primitive failure');
+      expect(Symbol.iterator in aggregate).toBe(false);
+      expect(results).toEqual(success ? [42] : []);
+    },
+  );
+});
+
 async function mapper({ value, ms }: { value: number; ms: number }): Promise<number> {
   await sleep(ms);
   return value;

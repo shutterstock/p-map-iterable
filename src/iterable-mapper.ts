@@ -1,8 +1,6 @@
 //
 // 2021-08-25 - Initially based on: https://raw.githubusercontent.com/sindresorhus/p-map/main/index.js
 //
-
-import AggregateError from 'aggregate-error';
 import { IterableQueue } from './iterable-queue';
 
 /**
@@ -52,8 +50,7 @@ export interface IterableMapperOptions {
   /**
    * When set to `false`, instead of stopping when a promise rejects, it will wait for all
    * the promises to settle and then reject with an
-   * [aggregated error](https://github.com/sindresorhus/aggregate-error) containing all the
-   * errors from the rejected promises.
+   * native `AggregateError` whose `errors` array contains the original rejection values.
    *
    * @default true
    */
@@ -242,7 +239,7 @@ export class IterableMapper<Element, NewElement> implements AsyncIterable<NewEle
   private _unreadQueue: IterableQueue<NewElementOrError<NewElement>>;
 
   private _iterator: AsyncIterator<Element> | Iterator<Element>;
-  private readonly _errors = [] as Error[];
+  private readonly _errors: unknown[] = [];
   private _asyncIterator = false;
   private _isRejected = false;
   private _isIterableDone = false;
@@ -355,7 +352,7 @@ export class IterableMapper<Element, NewElement> implements AsyncIterable<NewEle
       if (!this._options.stopOnMapperError && this._errors.length > 0) {
         // throw the errors as an aggregate exception
         this._isRejected = true;
-        throw new AggregateError(this._errors);
+        throw this.aggregateError();
       }
       return { value: undefined, done };
     }
@@ -376,8 +373,12 @@ export class IterableMapper<Element, NewElement> implements AsyncIterable<NewEle
   private bubbleUpErrors() {
     if (!this._options.stopOnMapperError && this._errors.length > 0) {
       // throw the errors as an aggregate exception
-      throw new AggregateError(this._errors);
+      throw this.aggregateError();
     }
+  }
+
+  private aggregateError(): AggregateError {
+    return new AggregateError(this._errors, this._errors.map(String).join('\n'));
   }
 
   private startARunnerIfNeeded() {

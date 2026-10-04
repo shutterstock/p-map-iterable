@@ -2,9 +2,27 @@
   "name": "@shutterstock/p-map-iterable",
   "version": "0.0.0",
   "packageManager": "pnpm@12.7.0",
-  "description": "Concurrent mapping and queued background work with backpressure, streaming results, and collected errors",
-  "main": "dist/src/index.js",
-  "types": "dist/src/index.d.ts",
+  "description": "Set of classes used for async prefetching with backpressure (IterableMapper) and async flushing with backpressure (IterableQueueMapper, IterableQueueMapperSimple)",
+  "type": "commonjs",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "default": "./dist/index.mjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "engines": {
+    "node": ">=22"
+  },
   "publishConfig": {
     "access": "public"
   },
@@ -25,7 +43,9 @@
     "AsyncIterator"
   ],
   "scripts": {
-    "build": "tsc --build tsconfig.json && echo 'examples/\n*.tsbuildinfo\n*.test.*\n*.d.ts.map' > dist/.npmignore",
+    "build": "node scripts/build.cjs",
+    "prepack": "pnpm run build",
+    "test:package": "node scripts/test-package.cjs",
     "build:docs": "typedoc --plugin @boneskull/typedoc-plugin-mermaid --mermaidSource local --ignoredHighlightLanguages mermaid src/index.ts",
     "example:iterable-mapper": "ts-node -r tsconfig-paths/register examples/iterable-mapper.ts",
     "example:iterable-queue-mapper": "ts-node -r tsconfig-paths/register examples/iterable-queue-mapper.ts",
@@ -45,12 +65,6 @@
     "url": "https://github.com/shutterstock/p-map-iterable.git"
   },
   "license": "MIT",
-  "dependencies": {
-    "aggregate-error": "^3.1.0"
-  },
-  "peerDependencies": {
-    "aggregate-error": "^3.1.0"
-  },
   "devDependencies": {
     "@boneskull/typedoc-plugin-mermaid": "^0.2.1",
     "@eslint/js": "^10.0.1",

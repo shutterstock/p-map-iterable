@@ -37,7 +37,7 @@ jobs:
   install-deps:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/configure-nodejs
         with:
           lookup-only: 'true' # We only want to lookup from the cache - if a hit, this job does nothing
@@ -53,7 +53,7 @@ jobs:
       pull-requests: write
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - uses: ./.github/actions/configure-nodejs
 
@@ -87,7 +87,7 @@ jobs:
     needs: install-deps
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: ./.github/actions/configure-nodejs
 
@@ -95,9 +95,10 @@ jobs:
         run: npm run build
 
       - name: Select older runtime after installing and building on Node 24
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '22.13.0'
+          package-manager-cache: false
 
       - name: Test
         run: npm run test

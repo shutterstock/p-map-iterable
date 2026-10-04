@@ -129,6 +129,22 @@ Required settings are managed by the repository owner:
   a resumed state merely from a successful enable request. See
   [GitHub's paused-update guidance](https://docs.github.com/en/code-security/dependabot/troubleshooting-dependabot/troubleshooting-dependabot-errors#dependabot-update-pull-requests-no-longer-generated).
 
+## GitHub Actions runtime
+
+The workflows use maintained major refs for checkout v7, setup-node v7, cache v6,
+upload-artifact v7, find-comment v4, create-or-update-comment v5, and gh-pages v4.
+Their current releases all run on Node 24 inside the Actions runner; this is
+independent of the Node 22.13 package runtime test lane. The verified
+`ubuntu-latest` CI run used Actions runner 2.337.0, satisfying the documented
+[Node 24 minimum of 2.327.1](https://github.com/actions/setup-node/tree/v7#breaking-changes-in-v5)
+and checkout's 2.329.0 requirement for authenticated Git commands in Docker
+container actions. These workflows use hosted Ubuntu runners and no container
+actions for authenticated Git operations.
+
+Setup-node's automatic npm caching is explicitly disabled. The existing
+node_modules cache, its Node/npm/OS/architecture/lockfile key, and lookup-only
+behavior remain authoritative even if a future manifest declares `packageManager`.
+
 ## Local validation
 
 Run `node --test .github/scripts/release-metadata.test.cjs` and `actionlint`.

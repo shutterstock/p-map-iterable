@@ -18,10 +18,13 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    - uses: actions/setup-node@v4
+    - uses: actions/setup-node@v7
       with:
         node-version: ${{ inputs.node-version }}
         registry-url: ${{ inputs.registry-url }}
+        # Preserve the explicit node_modules cache rather than enabling another
+        # cache when a future manifest declares npm as its package manager.
+        package-manager-cache: false
 
     - name: Select npm version
       shell: bash
@@ -31,7 +34,7 @@ runs:
 
     - name: Restore Node Modules from Cache
       id: cache-node-modules
-      uses: actions/cache@v4
+      uses: actions/cache@v6
       with:
         path: |
           node_modules

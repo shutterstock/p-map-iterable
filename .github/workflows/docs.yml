@@ -19,7 +19,7 @@ jobs:
     outputs:
       publish: ${{ github.event_name == 'workflow_dispatch' || steps.release.outputs.npm-tag == 'latest' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.release.tag_name || github.ref }}
           fetch-depth: 0
@@ -38,7 +38,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.release.tag_name || github.ref }}
           persist-credentials: false

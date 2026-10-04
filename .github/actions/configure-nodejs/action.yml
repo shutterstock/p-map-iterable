@@ -13,6 +13,9 @@ runs:
   using: 'composite'
   steps:
     - uses: pwrdrvr/configure-nodejs@f51ed2be76fbdf3e3374478ef5cd59a7687434ec # v1.5.0
+      env:
+        # pnpm 12 uses PNPM_CONFIG_*; the official action sets the older npm_config_*.
+        PNPM_CONFIG_STORE_DIR: ${{ github.workspace }}/.pnpm-store
       with:
         node-version: ${{ inputs.node-version }}
         package-manager: pnpm

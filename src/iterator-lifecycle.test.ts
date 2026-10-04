@@ -103,26 +103,34 @@ describe('iterator lifecycle', () => {
     expect(close).toHaveBeenCalledTimes(1);
   });
 
-  test('queue mapper failure releases producers blocked on admission', async () => {
-    const error = new Error('write failed');
-    const result = deferred<number>();
-    const started = deferred<void>();
-    const mapper = new IterableQueueMapper<number, number>(
-      async () => {
-        started.resolve();
-        return result.promise;
-      },
-      { concurrency: 1, maxUnread: 1 },
-    );
-    await mapper.enqueue(1);
-    await started.promise;
-    const pendingWrite = mapper.enqueue(2);
-    const writeFailed = expect(pendingWrite).rejects.toBe(error);
-    const readFailed = expect(mapper.next()).rejects.toBe(error);
-    result.reject(error);
-    await Promise.all([writeFailed, readFailed]);
-    await expect(mapper.enqueue(3)).rejects.toBe(error);
-  });
+  test.each([new Error('write failed'), undefined, null, 'failed', 0, false])(
+    'queue mapper failure releases producers without a result consumer, preserving %p',
+    async (error) => {
+      const result = deferred<number>();
+      const started = deferred<void>();
+      const mapper = new IterableQueueMapper<number, number>(
+        async () => {
+          started.resolve();
+          return result.promise;
+        },
+        { concurrency: 1, maxUnread: 1 },
+      );
+      await mapper.enqueue(1);
+      await started.promise;
+      const pendingWrite = mapper.enqueue(2);
+      const writes = Promise.allSettled([pendingWrite]);
+      let settled = false;
+      void writes.then(() => {
+        settled = true;
+      });
+      result.reject(error);
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      expect(settled).toBe(true);
+      expect(await writes).toEqual([{ status: 'rejected', reason: error }]);
+      await expect(mapper.next()).rejects.toBe(error);
+      await expect(mapper.enqueue(3)).rejects.toBe(error);
+    },
+  );
 
   test('invalid iterator results reject readers instead of escaping in a background promise', async () => {
     const source: Iterable<number> = {

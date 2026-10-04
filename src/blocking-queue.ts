@@ -106,8 +106,10 @@ export class BlockingQueue<Element> {
    * Discard buffered items and reject current and future reads and writes.
    * Unlike `done()`, abort does not wait for a consumer to drain the queue.
    */
-  public abort(reason: unknown = new Error('Queue aborted')): void {
+  public abort(reason?: unknown): void {
     if (this._aborted) return;
+    // An explicitly supplied undefined is a valid rejection reason.
+    if (arguments.length === 0) reason = new Error('Queue aborted');
     this._aborted = true;
     this._abortReason = reason;
     this._doneAdding = true;

@@ -64,11 +64,27 @@ export class IterableQueueMapper<Element, NewElement> implements AsyncIterable<N
    * @see {@link IterableMapper} for underlying mapper implementation and examples of combined usage
    */
   constructor(mapper: Mapper<Element, NewElement>, options: IterableQueueMapperOptions = {}) {
+    if (typeof mapper !== 'function') {
+      throw new TypeError('Mapper function is required');
+    }
+    const { stopOnMapperError = true } = options;
     this._sourceIterable = new IterableQueue({
       maxUnread: 0,
     });
     this._externalSignal = options.signal;
-    this._iterableMapper = new IterableMapper(this._sourceIterable, mapper, options);
+    this._iterableMapper = new IterableMapper(
+      this._sourceIterable,
+      async (element, index, signal) => {
+        try {
+          return await mapper(element, index, signal);
+        } catch (error) {
+          // Release input producers even when nobody is consuming results.
+          if (stopOnMapperError) this._sourceIterable.abort(error);
+          throw error;
+        }
+      },
+      options,
+    );
     if (this._externalSignal?.aborted) {
       this._onAbort();
     } else {

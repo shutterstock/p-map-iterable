@@ -58,6 +58,9 @@ export interface IterableMapperOptions {
    * @default true
    */
   readonly stopOnMapperError?: boolean;
+
+  /** Cancel iteration and signal running mapper operations cooperatively. */
+  readonly signal?: AbortSignal;
 }
 
 /**
@@ -67,10 +70,12 @@ export interface IterableMapperOptions {
  * @template NewElement - Element type returned by the mapper
  * @param element - Iterated element
  * @param index - Index of the element in the source array
+ * @param signal - Aborted when iteration closes, fails, or its external signal aborts
  */
 export type Mapper<Element = unknown, NewElement = unknown> = (
   element: Element,
   index: number,
+  signal: AbortSignal,
 ) => NewElement | Promise<NewElement>;
 
 /**
@@ -228,7 +233,7 @@ type NewElementOrError<NewElement = unknown> = { element: NewElement } | { error
  */
 export class IterableMapper<Element, NewElement> implements AsyncIterable<NewElement> {
   private _mapper: Mapper<Element, NewElement>;
-  private _options: Required<IterableMapperOptions>;
+  private _options: Required<Omit<IterableMapperOptions, 'signal'>>;
 
   private _unreadQueue: IterableQueue<NewElementOrError<NewElement>>;
 
@@ -239,6 +244,9 @@ export class IterableMapper<Element, NewElement> implements AsyncIterable<NewEle
   private _terminalError: { error: unknown } | undefined;
   private _isCancelled = false;
   private _sourceClose: Promise<void> | undefined;
+  private readonly _controller = new AbortController();
+  private readonly _externalSignal: AbortSignal | undefined;
+  private readonly _onAbort = () => this.fail(this._externalSignal?.reason);
   private _isIterableDone = false;
   private _activeRunners = 0;
   private _currentIndex = 0;
@@ -261,6 +269,7 @@ export class IterableMapper<Element, NewElement> implements AsyncIterable<NewEle
     const { concurrency = 4, stopOnMapperError = true, maxUnread = 8 } = options;
 
     this._mapper = mapper;
+    this._externalSignal = options.signal;
     this._options = { concurrency, stopOnMapperError, maxUnread };
 
     if (typeof mapper !== 'function') {
@@ -315,6 +324,12 @@ export class IterableMapper<Element, NewElement> implements AsyncIterable<NewEle
     } else {
       this._iterator = (input as Iterable<Element>)[Symbol.iterator]();
     }
+
+    if (this._externalSignal?.aborted) {
+      this.fail(this._externalSignal.reason);
+      return;
+    }
+    this._externalSignal?.addEventListener('abort', this._onAbort, { once: true });
 
     // Create the initial concurrent runners in a detached (non-awaited)
     // promise.  We need this so we can await the next() calls
@@ -380,6 +395,7 @@ export class IterableMapper<Element, NewElement> implements AsyncIterable<NewEle
     }
 
     this.startARunnerIfNeeded();
+    this.areWeDone();
 
     return { value: this.throwIfError(item), done: false };
   }
@@ -392,7 +408,10 @@ export class IterableMapper<Element, NewElement> implements AsyncIterable<NewEle
   public async return(): Promise<IteratorResult<NewElement>> {
     this._isCancelled = true;
     this._isIterableDone = true;
-    this._unreadQueue.abort(new Error('Iteration closed'));
+    const reason = new Error('Iteration closed');
+    this.detachAbortListener();
+    this._controller.abort(reason);
+    this._unreadQueue.abort(reason);
     await this.closeSource();
     return { value: undefined, done: true };
   }
@@ -409,6 +428,8 @@ export class IterableMapper<Element, NewElement> implements AsyncIterable<NewEle
     this._terminalError = { error };
     this._isRejected = true;
     this._isIterableDone = true;
+    this.detachAbortListener();
+    this._controller.abort(error);
     this._unreadQueue.abort(error);
     // Preserve the primary failure if source cleanup also fails.
     void this.closeSource().catch(() => undefined);
@@ -416,6 +437,10 @@ export class IterableMapper<Element, NewElement> implements AsyncIterable<NewEle
 
   private throwIfFailed(): void {
     if (this._terminalError) throw this._terminalError.error;
+  }
+
+  private detachAbortListener(): void {
+    this._externalSignal?.removeEventListener('abort', this._onAbort);
   }
 
   private bubbleUpErrors() {
@@ -480,6 +505,7 @@ export class IterableMapper<Element, NewElement> implements AsyncIterable<NewEle
         // No runner can add another result. Mark completion even when buffered
         // results remain so parallel reads beyond the last item also settle.
         this._unreadQueue.done();
+        if (this._unreadQueue.length === 0) this.detachAbortListener();
         return this._unreadQueue.length === 0;
       }
     }
@@ -572,7 +598,7 @@ export class IterableMapper<Element, NewElement> implements AsyncIterable<NewEle
           return;
         }
 
-        const value = await this._mapper(element, index);
+        const value = await this._mapper(element, index, this._controller.signal);
 
         if (this._isRejected || this._isCancelled) {
           this._activeRunners--;

@@ -50,6 +50,8 @@ export class IterableQueueMapper<Element, NewElement> implements AsyncIterable<N
   private _iterableMapper: IterableMapper<Element, NewElement>;
 
   private _sourceIterable: IterableQueue<Element>;
+  private readonly _externalSignal: AbortSignal | undefined;
+  private readonly _onAbort = () => this._sourceIterable.abort(this._externalSignal?.reason);
 
   /**
    * Create a new `IterableQueueMapper`, which uses `IterableMapper` underneath, and exposes a
@@ -65,7 +67,13 @@ export class IterableQueueMapper<Element, NewElement> implements AsyncIterable<N
     this._sourceIterable = new IterableQueue({
       maxUnread: 0,
     });
+    this._externalSignal = options.signal;
     this._iterableMapper = new IterableMapper(this._sourceIterable, mapper, options);
+    if (this._externalSignal?.aborted) {
+      this._onAbort();
+    } else {
+      this._externalSignal?.addEventListener('abort', this._onAbort, { once: true });
+    }
   }
 
   public [Symbol.asyncIterator](): AsyncIterator<NewElement> {
@@ -79,8 +87,11 @@ export class IterableQueueMapper<Element, NewElement> implements AsyncIterable<N
    */
   public async next(): Promise<IteratorResult<NewElement>> {
     try {
-      return await this._iterableMapper.next();
+      const result = await this._iterableMapper.next();
+      if (result.done) this.detachAbortListener();
+      return result;
     } catch (error) {
+      this.detachAbortListener();
       this._sourceIterable.abort(error);
       throw error;
     }
@@ -88,9 +99,14 @@ export class IterableQueueMapper<Element, NewElement> implements AsyncIterable<N
 
   /** Stop consuming and reject producers waiting to enqueue more input. */
   public async return(): Promise<IteratorResult<NewElement>> {
+    this.detachAbortListener();
     const closed = this._iterableMapper.return();
     this._sourceIterable.abort(new Error('Iteration closed'));
     return closed;
+  }
+
+  private detachAbortListener(): void {
+    this._externalSignal?.removeEventListener('abort', this._onAbort);
   }
 
   /**

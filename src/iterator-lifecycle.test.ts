@@ -196,4 +196,87 @@ describe('iterator lifecycle', () => {
       { status: 'rejected', reason: error },
     ]);
   });
+
+  test('external abort signals running mappers and releases every reader', async () => {
+    const abort = new AbortController();
+    const error = new Error('request cancelled');
+    const started = deferred<void>();
+    const mapper = new IterableMapper(
+      [1],
+      async (_value, _index, signal) => {
+        started.resolve();
+        return new Promise<number>((_resolve, reject) => {
+          signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+        });
+      },
+      { concurrency: 1, maxUnread: 1, signal: abort.signal },
+    );
+    const reads = Promise.allSettled([mapper.next(), mapper.next()]);
+    await started.promise;
+    abort.abort(error);
+    expect(await reads).toEqual([
+      { status: 'rejected', reason: error },
+      { status: 'rejected', reason: error },
+    ]);
+    await expect(mapper.next()).rejects.toBe(error);
+  });
+
+  test('a pre-aborted input never invokes the mapper', async () => {
+    const abort = new AbortController();
+    const reason = new Error('already cancelled');
+    abort.abort(reason);
+    const callback = jest.fn((value: number) => value);
+    const mapper = new IterableMapper([1], callback, { signal: abort.signal });
+    await expect(mapper.next()).rejects.toBe(reason);
+    expect(callback).not.toHaveBeenCalled();
+  });
+
+  test('completed iteration detaches from later external cancellation', async () => {
+    const abort = new AbortController();
+    const mapper = new IterableMapper([1], (value) => value, { signal: abort.signal });
+    expect(await mapper.next()).toEqual({ value: 1, done: false });
+    expect(await mapper.next()).toEqual({ value: undefined, done: true });
+    abort.abort(new Error('later request'));
+    expect(await mapper.next()).toEqual({ value: undefined, done: true });
+  });
+
+  test('queue abort releases producers even without a pending result consumer', async () => {
+    const abort = new AbortController();
+    const error = new Error('stop producer');
+    const started = deferred<void>();
+    const result = deferred<number>();
+    const queue = new IterableQueueMapper<number, number>(
+      async () => {
+        started.resolve();
+        return result.promise;
+      },
+      { concurrency: 1, maxUnread: 1, signal: abort.signal },
+    );
+    await queue.enqueue(1);
+    await started.promise;
+    const failed = expect(queue.enqueue(2)).rejects.toBe(error);
+    abort.abort(error);
+    await failed;
+    await expect(queue.enqueue(3)).rejects.toBe(error);
+    await expect(queue.next()).rejects.toBe(error);
+    result.resolve(1);
+  });
+
+  test('return cooperatively aborts running mapper callbacks', async () => {
+    const started = deferred<AbortSignal>();
+    const mapper = new IterableMapper(
+      [1],
+      async (_value, _index, signal) => {
+        started.resolve(signal);
+        return new Promise<number>((_resolve, reject) => {
+          signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+        });
+      },
+      { concurrency: 1, maxUnread: 1 },
+    );
+    const signal = await started.promise;
+    await mapper.return();
+    expect(signal.aborted).toBe(true);
+    expect(await mapper.next()).toEqual({ value: undefined, done: true });
+  });
 });

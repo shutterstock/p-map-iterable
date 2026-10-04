@@ -40,7 +40,8 @@ export type IterableQueueMapperOptions = IterableMapperOptions;
  * - Items are added to the queue via the `await enqueue()` method
  * - IMPORTANT: `await enqueue()` method will block until a slot is available, if queue is full
  * - Call `done()` when no more items will be enqueued
- * - IMPORTANT: Always `await onIdle()` to ensure all items are processed
+ * - Consume results concurrently with enqueueing to avoid output-backpressure deadlock
+ * - After `done()`, continue consuming until iteration completes to observe every result or failure
  *
  * @category Enqueue Input
  *
@@ -50,6 +51,8 @@ export class IterableQueueMapper<Element, NewElement> implements AsyncIterable<N
   private _iterableMapper: IterableMapper<Element, NewElement>;
 
   private _sourceIterable: IterableQueue<Element>;
+  private readonly _externalSignal: AbortSignal | undefined;
+  private readonly _onAbort = () => this._sourceIterable.abort(this._externalSignal?.reason);
 
   /**
    * Create a new `IterableQueueMapper`, which uses `IterableMapper` underneath, and exposes a
@@ -62,10 +65,32 @@ export class IterableQueueMapper<Element, NewElement> implements AsyncIterable<N
    * @see {@link IterableMapper} for underlying mapper implementation and examples of combined usage
    */
   constructor(mapper: Mapper<Element, NewElement>, options: IterableQueueMapperOptions = {}) {
+    if (typeof mapper !== 'function') {
+      throw new TypeError('Mapper function is required');
+    }
+    const { stopOnMapperError = true } = options;
     this._sourceIterable = new IterableQueue({
       maxUnread: 0,
     });
-    this._iterableMapper = new IterableMapper(this._sourceIterable, mapper, options);
+    this._externalSignal = options.signal;
+    this._iterableMapper = new IterableMapper(
+      this._sourceIterable,
+      async (element, index, signal) => {
+        try {
+          return await mapper(element, index, signal);
+        } catch (error) {
+          // Release input producers even when nobody is consuming results.
+          if (stopOnMapperError) this._sourceIterable.abort(error);
+          throw error;
+        }
+      },
+      options,
+    );
+    if (this._externalSignal?.aborted) {
+      this._onAbort();
+    } else {
+      this._externalSignal?.addEventListener('abort', this._onAbort, { once: true });
+    }
   }
 
   public [Symbol.asyncIterator](): AsyncIterator<NewElement> {
@@ -78,7 +103,27 @@ export class IterableQueueMapper<Element, NewElement> implements AsyncIterable<N
    * @returns Iterator result
    */
   public async next(): Promise<IteratorResult<NewElement>> {
-    return this._iterableMapper.next();
+    try {
+      const result = await this._iterableMapper.next();
+      if (result.done) this.detachAbortListener();
+      return result;
+    } catch (error) {
+      this.detachAbortListener();
+      this._sourceIterable.abort(error);
+      throw error;
+    }
+  }
+
+  /** Stop consuming and reject producers waiting to enqueue more input. */
+  public async return(): Promise<IteratorResult<NewElement>> {
+    this.detachAbortListener();
+    const closed = this._iterableMapper.return();
+    this._sourceIterable.abort(new Error('Iteration closed'));
+    return closed;
+  }
+
+  private detachAbortListener(): void {
+    this._externalSignal?.removeEventListener('abort', this._onAbort);
   }
 
   /**

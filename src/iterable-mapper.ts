@@ -1,8 +1,8 @@
 //
 // 2021-08-25 - Initially based on: https://raw.githubusercontent.com/sindresorhus/p-map/main/index.js
 //
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const AggregateError = require('aggregate-error');
+
+import AggregateError from 'aggregate-error';
 import { IterableQueue } from './iterable-queue';
 
 /**
@@ -58,6 +58,9 @@ export interface IterableMapperOptions {
    * @default true
    */
   readonly stopOnMapperError?: boolean;
+
+  /** Cancel iteration and signal running mapper operations cooperatively. */
+  readonly signal?: AbortSignal;
 }
 
 /**
@@ -67,19 +70,18 @@ export interface IterableMapperOptions {
  * @template NewElement - Element type returned by the mapper
  * @param element - Iterated element
  * @param index - Index of the element in the source array
+ * @param signal - Aborted when iteration closes, fails, or its external signal aborts
  */
 export type Mapper<Element = unknown, NewElement = unknown> = (
   element: Element,
   index: number,
+  signal: AbortSignal,
 ) => NewElement | Promise<NewElement>;
 
 /**
  * Wraps a new element or caught exception
  */
-type NewElementOrError<NewElement = unknown> = {
-  element?: NewElement;
-  error?: unknown;
-};
+type NewElementOrError<NewElement = unknown> = { element: NewElement } | { error: unknown };
 
 /**
  * Iterates over a source iterable / generator with specified `concurrency`,
@@ -186,10 +188,9 @@ type NewElementOrError<NewElement = unknown> = {
  * }
  * ```
  *
- * This reduces iteration time to about `max((max(readTime, writeTime) - cpuOpTime, cpuOpTime))`
- * by overlapping reads and writes with the CPU processing step.
- * In this contrived example, the loop time is reduced to 500ms - 20ms = 480ms.
- * In cases where the CPU usage time is higher, the impact can be greater.
+ * Reads, processing, and writes overlap, but throughput remains limited by the slowest stage.
+ * In this example, serial 500ms writes limit steady-state throughput to at most two items
+ * per second, even when reads and CPU processing run in the background.
  *
  * @example
  *
@@ -223,15 +224,16 @@ type NewElementOrError<NewElement = unknown> = {
  * }
  * ```
  *
- * This reduces iteration time to about 20ms by overlapping reads and writes with the CPU processing step.
- * In this contrived (but common) example we would get a 41x improvement in throughput, removing 97.5% of
- * the time to process each item and fully utilizing the CPU time available in the JS event loop.
+ * With ten concurrent reads and writes, the ideal steady-state limits are 30ms per item
+ * for reads, 50ms for writes, and 20ms for CPU processing. Writes remain the bottleneck;
+ * concurrency does not guarantee a 20ms iteration time. Actual throughput also depends
+ * on service limits, scheduling, and startup/shutdown costs.
  *
  * @category Iterable Input
  */
 export class IterableMapper<Element, NewElement> implements AsyncIterable<NewElement> {
   private _mapper: Mapper<Element, NewElement>;
-  private _options: Required<IterableMapperOptions>;
+  private _options: Required<Omit<IterableMapperOptions, 'signal'>>;
 
   private _unreadQueue: IterableQueue<NewElementOrError<NewElement>>;
 
@@ -239,9 +241,14 @@ export class IterableMapper<Element, NewElement> implements AsyncIterable<NewEle
   private readonly _errors = [] as Error[];
   private _asyncIterator = false;
   private _isRejected = false;
+  private _terminalError: { error: unknown } | undefined;
+  private _isCancelled = false;
+  private _sourceClose: Promise<void> | undefined;
+  private readonly _controller = new AbortController();
+  private readonly _externalSignal: AbortSignal | undefined;
+  private readonly _onAbort = () => this.fail(this._externalSignal?.reason);
   private _isIterableDone = false;
   private _activeRunners = 0;
-  private _resolvingCount = 0;
   private _currentIndex = 0;
   private _initialRunnersCreated = false;
 
@@ -262,6 +269,7 @@ export class IterableMapper<Element, NewElement> implements AsyncIterable<NewEle
     const { concurrency = 4, stopOnMapperError = true, maxUnread = 8 } = options;
 
     this._mapper = mapper;
+    this._externalSignal = options.signal;
     this._options = { concurrency, stopOnMapperError, maxUnread };
 
     if (typeof mapper !== 'function') {
@@ -278,26 +286,22 @@ export class IterableMapper<Element, NewElement> implements AsyncIterable<NewEle
     }
 
     // Validate concurrency option
-    if (
-      !(
-        (Number.isSafeInteger(this._options.concurrency) ||
-          this._options.concurrency === Number.POSITIVE_INFINITY) &&
-        this._options.concurrency >= 1
-      )
-    ) {
+    if (!(
+      (Number.isSafeInteger(this._options.concurrency) ||
+        this._options.concurrency === Number.POSITIVE_INFINITY) &&
+      this._options.concurrency >= 1
+    )) {
       throw new TypeError(
         `Expected \`concurrency\` to be an integer from 1 and up or \`Infinity\`, got \`${concurrency}\` (${typeof concurrency})`,
       );
     }
 
     // Validate maxUnread option
-    if (
-      !(
-        (Number.isSafeInteger(this._options.maxUnread) ||
-          this._options.maxUnread === Number.POSITIVE_INFINITY) &&
-        this._options.maxUnread >= 1
-      )
-    ) {
+    if (!(
+      (Number.isSafeInteger(this._options.maxUnread) ||
+        this._options.maxUnread === Number.POSITIVE_INFINITY) &&
+      this._options.maxUnread >= 1
+    )) {
       throw new TypeError(
         `Expected \`maxUnread\` to be an integer from 1 and up or \`Infinity\`, got \`${maxUnread}\` (${typeof maxUnread})`,
       );
@@ -320,6 +324,12 @@ export class IterableMapper<Element, NewElement> implements AsyncIterable<NewEle
     } else {
       this._iterator = (input as Iterable<Element>)[Symbol.iterator]();
     }
+
+    if (this._externalSignal?.aborted) {
+      this.fail(this._externalSignal.reason);
+      return;
+    }
+    this._externalSignal?.addEventListener('abort', this._onAbort, { once: true });
 
     // Create the initial concurrent runners in a detached (non-awaited)
     // promise.  We need this so we can await the next() calls
@@ -356,6 +366,8 @@ export class IterableMapper<Element, NewElement> implements AsyncIterable<NewEle
    * @returns Iterator result
    */
   public async next(): Promise<IteratorResult<NewElement>> {
+    if (this._isCancelled) return { value: undefined, done: true };
+    this.throwIfFailed();
     // Bail out and release all waiters if there are no more items coming
     const done = this.areWeDone();
     if (done) {
@@ -368,7 +380,14 @@ export class IterableMapper<Element, NewElement> implements AsyncIterable<NewEle
     }
 
     // Check if queue has an item
-    const item = await this._unreadQueue.dequeue();
+    let item: NewElementOrError<NewElement> | undefined;
+    try {
+      item = await this._unreadQueue.dequeue();
+    } catch (error) {
+      if (this._isCancelled) return { value: undefined, done: true };
+      this.throwIfFailed();
+      throw error;
+    }
     if (item === undefined) {
       // We finished - There were no more items
       this.bubbleUpErrors();
@@ -376,8 +395,52 @@ export class IterableMapper<Element, NewElement> implements AsyncIterable<NewEle
     }
 
     this.startARunnerIfNeeded();
+    this.areWeDone();
 
     return { value: this.throwIfError(item), done: false };
+  }
+
+  /**
+   * Stop prefetching, release pending reads, and close the source iterator.
+   * Called automatically when a `for await` loop exits early. Already running
+   * mapper callbacks may finish, but their results are discarded.
+   */
+  public async return(): Promise<IteratorResult<NewElement>> {
+    this._isCancelled = true;
+    this._isIterableDone = true;
+    const reason = new Error('Iteration closed');
+    this.detachAbortListener();
+    this._controller.abort(reason);
+    this._unreadQueue.abort(reason);
+    await this.closeSource();
+    return { value: undefined, done: true };
+  }
+
+  private async closeSource(): Promise<void> {
+    this._sourceClose ??= (async () => {
+      await this._iterator.return?.();
+    })();
+    await this._sourceClose;
+  }
+
+  private fail(error: unknown): void {
+    if (this._isCancelled || this._terminalError) return;
+    this._terminalError = { error };
+    this._isRejected = true;
+    this._isIterableDone = true;
+    this.detachAbortListener();
+    this._controller.abort(error);
+    this._unreadQueue.abort(error);
+    // Preserve the primary failure if source cleanup also fails.
+    void this.closeSource().catch(() => undefined);
+  }
+
+  private throwIfFailed(): void {
+    if (this._terminalError) throw this._terminalError.error;
+  }
+
+  private detachAbortListener(): void {
+    this._externalSignal?.removeEventListener('abort', this._onAbort);
   }
 
   private bubbleUpErrors() {
@@ -398,7 +461,7 @@ export class IterableMapper<Element, NewElement> implements AsyncIterable<NewEle
         // We only create more runners if the source iterable is not already done
         if (this._activeRunners < this._options.concurrency) {
           // We only create runners if we're under the concurrency limit
-          if (this._unreadQueue.length + this._activeRunners <= this._options.maxUnread) {
+          if (this._unreadQueue.length + this._activeRunners < this._options.maxUnread) {
             // We only create runners if the number of runners + unread items will not
             // exceed the unread queue length
 
@@ -415,7 +478,7 @@ export class IterableMapper<Element, NewElement> implements AsyncIterable<NewEle
       throw new TypeError('active runners would be greater than concurrency limit');
     }
 
-    if (this._activeRunners + this._unreadQueue.length > this._options.maxUnread) {
+    if (this._activeRunners + this._unreadQueue.length >= this._options.maxUnread) {
       throw new TypeError('active runners would overflow the read queue limit');
     }
 
@@ -437,14 +500,13 @@ export class IterableMapper<Element, NewElement> implements AsyncIterable<NewEle
   private areWeDone(): boolean {
     if (this._isIterableDone) {
       // The source iterable has no more items
-      if (this._resolvingCount === 0) {
+      if (this._activeRunners === 0) {
         // There are no more resolvers running
-        if (this._unreadQueue.length === 0) {
-          // There are no unread items left
-          this._unreadQueue.done();
-
-          return true;
-        }
+        // No runner can add another result. Mark completion even when buffered
+        // results remain so parallel reads beyond the last item also settle.
+        this._unreadQueue.done();
+        if (this._unreadQueue.length === 0) this.detachAbortListener();
+        return this._unreadQueue.length === 0;
       }
     }
 
@@ -457,10 +519,8 @@ export class IterableMapper<Element, NewElement> implements AsyncIterable<NewEle
    * @returns Element if no error
    */
   private throwIfError(item: NewElementOrError<NewElement>): NewElement {
-    if (item.error !== undefined) {
+    if ('error' in item) {
       throw item.error;
-    } else if (item.element === undefined) {
-      throw new TypeError('no element was returned');
     }
     return item.element;
   }
@@ -481,50 +541,44 @@ export class IterableMapper<Element, NewElement> implements AsyncIterable<NewEle
    * will exit and will be restarted when an item is read from the queue.
    */
   private async sourceNext() {
-    if (this._isRejected) {
+    if (this._isRejected || this._isCancelled || this._isIterableDone) {
       this._activeRunners--;
+      this.areWeDone();
       return;
     }
 
     // Note: do NOT await a non-async iterable as it will cause next() to be
     // pushed into the event loop, slowing down iteration of non-async iterables.
+    const index = this._currentIndex++;
     let nextItem: IteratorResult<Element>;
     try {
+      let result: IteratorResult<Element>;
       if (this._asyncIterator) {
-        nextItem = await this._iterator.next();
+        result = await this._iterator.next();
       } else {
-        nextItem = (this._iterator as Iterator<Element>).next();
+        result = (this._iterator as Iterator<Element>).next();
       }
+      if (typeof result !== 'object' || result === null) {
+        throw new TypeError('Source iterator next() must return an object');
+      }
+      // Iterator result getters can also throw; report these as source failures.
+      nextItem = result.done
+        ? { value: undefined, done: true }
+        : { value: result.value, done: false };
     } catch (error) {
       // Iterator protocol / Iterables can throw exceptions - If this happens we have to just stop
       // regardless of stopOnMapperError since we can't iterate any additional items
-      this._isRejected = true;
       this._activeRunners--;
-
-      // Push the error onto the unread queue, to be rethrown by next()
-      await this._unreadQueue.enqueue({ error });
-
+      this.fail(error);
       return;
     }
-
-    const index = this._currentIndex;
-    this._currentIndex++;
 
     if (nextItem.done) {
       this._isIterableDone = true;
-
-      // If there are no active resolvers, then release all the waiters
-      if (this._resolvingCount === 0) {
-        // At this point the only waiters in the queue are not going to get an item
-        // as there are no source items left
-        this._unreadQueue.done();
-      }
-
       this._activeRunners--;
+      this.areWeDone();
       return;
     }
-
-    this._resolvingCount++;
 
     // This is created as a detached, non-awaited async
     // to allow next() to return while the async mapper is awaited.
@@ -539,13 +593,17 @@ export class IterableMapper<Element, NewElement> implements AsyncIterable<NewEle
       try {
         const element = nextItem.value;
 
-        if (this._isRejected) {
+        if (this._isRejected || this._isCancelled) {
           this._activeRunners--;
           return;
         }
 
-        const value = await this._mapper(element, index);
-        this._resolvingCount--;
+        const value = await this._mapper(element, index, this._controller.signal);
+
+        if (this._isRejected || this._isCancelled) {
+          this._activeRunners--;
+          return;
+        }
 
         // if (value === pMapSkip) {
         //   skippedIndexes.push(index);
@@ -557,19 +615,18 @@ export class IterableMapper<Element, NewElement> implements AsyncIterable<NewEle
         await this._unreadQueue.enqueue({ element: value });
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (error: any) {
-        if (this._options.stopOnMapperError) {
-          this._isRejected = true;
+        if (this._isRejected || this._isCancelled) {
           this._activeRunners--;
-
-          // Push the error onto the unread queue, to be rethrown by next()
-          await this._unreadQueue.enqueue({ error });
-
-          // Fall through to release a reader
+          return;
+        }
+        if (this._options.stopOnMapperError) {
+          this._activeRunners--;
+          this.fail(error);
+          return;
         } else {
           // Collect the error but do not stop iterating
           // These will be thrown in an AggregateError at the end
           this._errors.push(error);
-          this._resolvingCount--;
 
           await this.sourceNext();
 

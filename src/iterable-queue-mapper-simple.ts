@@ -81,7 +81,6 @@ export class IterableQueueMapperSimple<Element> {
   }
 
   private async discardResults(): Promise<void> {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     let item = await this._writer.next();
     while (item.done !== true) {
       // Just discard all the results
@@ -90,9 +89,13 @@ export class IterableQueueMapperSimple<Element> {
     }
   }
 
-  private async worker(item: Element, index: number): Promise<typeof NoResult> {
+  private async worker(
+    item: Element,
+    index: number,
+    signal: AbortSignal,
+  ): Promise<typeof NoResult> {
     try {
-      await this._mapper(item, index);
+      await this._mapper(item, index, signal);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       this._errors.push({ item, error });

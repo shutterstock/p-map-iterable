@@ -6,15 +6,18 @@ import { IterableQueueMapperSimple } from './iterable-queue-mapper-simple';
 import { Queue } from './queue';
 
 export {
-  Mapper,
   IterableMapper,
-  IterableMapperOptions,
   IterableQueueMapper,
-  IterableQueueMapperOptions,
   IterableQueueMapperSimple,
   BlockingQueue,
-  BlockingQueueOptions,
   IterableQueue,
-  IterableQueueOptions,
   Queue,
+};
+
+export type {
+  Mapper,
+  IterableMapperOptions,
+  IterableQueueMapperOptions,
+  BlockingQueueOptions,
+  IterableQueueOptions,
 };

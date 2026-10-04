@@ -17,14 +17,15 @@ const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const compiler = process.env.PACKAGE_TEST_TSC || require.resolve('typescript/bin/tsc');
 const temporary = mkdtempSync(join(root, '.package-tests-'));
 const packageName = '@shutterstock/p-map-iterable';
-const symbols = [
-  'BlockingQueue',
-  'IterableMapper',
-  'IterableQueue',
-  'IterableQueueMapper',
-  'IterableQueueMapperSimple',
-  'Queue',
-];
+const classTypes = {
+  BlockingQueue: '<number>',
+  IterableMapper: '<number, number>',
+  IterableQueue: '<number>',
+  IterableQueueMapper: '<number, number>',
+  IterableQueueMapperSimple: '<number>',
+  Queue: '<number>',
+};
+const symbols = Object.keys(classTypes).sort();
 
 function run(command, args, cwd) {
   try {
@@ -91,8 +92,12 @@ try {
     const manifest = JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8'));
     assert.equal(manifest.type, 'commonjs');
     assert.equal(manifest.engines.node, '>=22');
-    assert.equal(manifest.dependencies?.['aggregate-error'], undefined);
-    assert.equal(manifest.peerDependencies?.['aggregate-error'], undefined);
+    assert.deepEqual(manifest.dependencies || {}, {}, 'Runtime dependencies must remain empty');
+    assert.deepEqual(
+      manifest.peerDependencies || {},
+      {},
+      'Runtime peer dependencies must remain empty',
+    );
     assert.deepEqual(Object.keys(manifest.exports['.'].import), ['types', 'default']);
     assert.deepEqual(Object.keys(manifest.exports['.'].require), ['types', 'default']);
     for (const entrypoint of [
@@ -151,7 +156,7 @@ try {
       }
       run(process.execPath, [runtime], app);
       console.log(
-        `PASS ${kind}: ${module}/${moduleResolution}, declarations + runtime (all six APIs + native errors)`,
+        `PASS ${kind}: ${module}/${moduleResolution}, declarations + runtime (public APIs + native errors)`,
       );
     }
   }
@@ -186,7 +191,7 @@ try {
     join(temporary, 'esm'),
   );
   console.log(
-    'PASS parity: same tarball, six shared constructors, default export, conditional entrypoints, private paths',
+    `PASS parity: same tarball, ${symbols.length} shared constructors, default export, conditional entrypoints, private paths`,
   );
 
   const identityApp = join(temporary, 'esm');
@@ -196,9 +201,7 @@ try {
       `import cjs = require('${packageName}');`,
       `import { ${symbols.join(', ')} } from '${packageName}';`,
       ...symbols.flatMap((name) => {
-        const parameters = ['IterableMapper', 'IterableQueueMapper'].includes(name)
-          ? '<number, number>'
-          : '<number>';
+        const parameters = classTypes[name];
         return [
           `declare const cjs${name}: cjs.${name}${parameters};`,
           `declare const esm${name}: ${name}${parameters};`,
@@ -224,7 +227,9 @@ try {
     }),
   );
   run(process.execPath, [compiler, '-p', 'tsconfig.identity.json'], identityApp);
-  console.log('PASS type identity: all six CJS/ESM class types assignable in both directions');
+  console.log(
+    `PASS type identity: all ${symbols.length} CJS/ESM class types assignable in both directions`,
+  );
 } finally {
   rmSync(temporary, { recursive: true, force: true });
 }

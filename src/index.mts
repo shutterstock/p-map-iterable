@@ -14,6 +14,14 @@ export const IterableQueue = api.IterableQueue;
 export type IterableQueue<Element> = api.IterableQueue<Element>;
 export const Queue = api.Queue;
 export type Queue<Element> = api.Queue<Element>;
+export const TaskQueue = api.TaskQueue;
+export type TaskQueue = api.TaskQueue;
+export const QueueFullError = api.QueueFullError;
+export type QueueFullError = api.QueueFullError;
+export const QueueClosedError = api.QueueClosedError;
+export type QueueClosedError = api.QueueClosedError;
+export const TaskCancelledError = api.TaskCancelledError;
+export type TaskCancelledError = api.TaskCancelledError;
 
 export type {
   Mapper,
@@ -21,6 +29,13 @@ export type {
   IterableQueueMapperOptions,
   BlockingQueueOptions,
   IterableQueueOptions,
+  IterableQueueMapperSimpleOptions,
+  Task,
+  TaskOutcome,
+  TaskHandle,
+  TaskQueueOptions,
+  TaskOptions,
+  TaskQueueCloseOptions,
 } from './index.js';
 
 export default api;

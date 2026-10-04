@@ -24,12 +24,21 @@ const classTypes = {
   IterableQueueMapper: '<number, number>',
   IterableQueueMapperSimple: '<number>',
   Queue: '<number>',
+  TaskQueue: '',
+  QueueFullError: '',
+  QueueClosedError: '',
+  TaskCancelledError: '',
 };
 const symbols = Object.keys(classTypes).sort();
 
 function run(command, args, cwd) {
   try {
-    return execFileSync(command, args, { cwd, encoding: 'utf8', timeout: 120_000 });
+    return execFileSync(command, args, {
+      cwd,
+      encoding: 'utf8',
+      timeout: 120_000,
+      maxBuffer: 16 * 1024 * 1024,
+    });
   } catch (error) {
     process.stderr.write(error.stdout || '');
     process.stderr.write(error.stderr || '');
@@ -57,6 +66,7 @@ try {
     'iterable-queue-mapper',
     'iterable-queue-mapper-simple',
     'queue',
+    'task-queue',
   ];
   const expected = [
     'LICENSE.md',
@@ -80,7 +90,15 @@ try {
     cpSync(join(root, 'tests', 'package', kind), app, { recursive: true });
     run(
       npm,
-      ['install', '--ignore-scripts', '--no-audit', '--no-fund', '--save-exact', tarball],
+      [
+        'install',
+        '--include=dev',
+        '--ignore-scripts',
+        '--no-audit',
+        '--no-fund',
+        '--save-exact',
+        tarball,
+      ],
       app,
     );
     const packageRoot = join(app, 'node_modules', packageName);
@@ -90,6 +108,10 @@ try {
     assert.equal(entry.integrity, integrity);
     assert(entry.resolved.endsWith(pack.filename));
     const manifest = JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8'));
+    const nodeTypes = JSON.parse(
+      readFileSync(join(app, 'node_modules/@types/node/package.json'), 'utf8'),
+    );
+    assert.match(nodeTypes.version, /^22\./);
     assert.equal(manifest.type, 'commonjs');
     assert.equal(manifest.engines.node, '>=22');
     assert.deepEqual(manifest.dependencies || {}, {}, 'Runtime dependencies must remain empty');
@@ -120,44 +142,60 @@ try {
     ]);
     if (kind === 'esm') modes.push(['esnext', 'bundler']);
     const source = `consumer.${kind === 'cjs' ? 'cts' : 'mts'}`;
+    const profiles = [
+      { name: 'default-libs', types: [] },
+      { name: 'node22-only', lib: ['es2021'], types: ['node'] },
+    ];
     for (const [module, moduleResolution] of modes) {
-      const output = `${module}-${moduleResolution}`;
-      writeFileSync(
-        join(app, 'tsconfig.json'),
-        JSON.stringify({
-          compilerOptions: {
-            module,
-            moduleResolution,
-            target: 'es2021',
-            strict: true,
-            skipLibCheck: false,
-            types: [],
-            outDir: output,
-          },
-          files: [source],
-        }),
-      );
-      const trace = run(
-        process.execPath,
-        [compiler, '-p', 'tsconfig.json', '--traceResolution'],
-        app,
-      );
-      const resolution = trace
-        .split('\n')
-        .find((line) => line.includes(`Module name '${packageName}' was successfully resolved to`));
-      assert(resolution, 'Compiler must report the consumer package resolution');
-      assert(resolution.includes(`/dist/index.${kind === 'cjs' ? 'd.ts' : 'd.mts'}'`), resolution);
-      const runtime = join(output, `consumer.${kind === 'cjs' ? 'cjs' : 'mjs'}`);
-      const emitted = readFileSync(join(app, runtime), 'utf8');
-      if (kind === 'cjs') assert.match(emitted, /\brequire\(/);
-      else {
-        assert.match(emitted, /\bimport\b/);
-        assert.doesNotMatch(emitted, /\brequire\(/);
+      for (const profile of profiles) {
+        const output = `${module}-${moduleResolution}-${profile.name}`;
+        writeFileSync(
+          join(app, 'tsconfig.json'),
+          JSON.stringify({
+            compilerOptions: {
+              module,
+              moduleResolution,
+              target: 'es2021',
+              strict: true,
+              skipLibCheck: false,
+              lib: profile.lib,
+              types: profile.types,
+              outDir: output,
+            },
+            files: [source],
+          }),
+        );
+        const trace = run(
+          process.execPath,
+          [compiler, '-p', 'tsconfig.json', '--traceResolution', '--listFiles'],
+          app,
+        );
+        const resolution = trace
+          .split('\n')
+          .find((line) =>
+            line.includes(`Module name '${packageName}' was successfully resolved to`),
+          );
+        assert(resolution, 'Compiler must report the consumer package resolution');
+        assert(
+          resolution.includes(`/dist/index.${kind === 'cjs' ? 'd.ts' : 'd.mts'}'`),
+          resolution,
+        );
+        if (profile.name === 'node22-only') {
+          assert(trace.includes(`${app}/node_modules/@types/node/index.d.ts`));
+          assert.doesNotMatch(trace, /\/lib\.dom[^/]*\.d\.ts\s*$/m);
+        }
+        const runtime = join(output, `consumer.${kind === 'cjs' ? 'cjs' : 'mjs'}`);
+        const emitted = readFileSync(join(app, runtime), 'utf8');
+        if (kind === 'cjs') assert.match(emitted, /\brequire\(/);
+        else {
+          assert.match(emitted, /\bimport\b/);
+          assert.doesNotMatch(emitted, /\brequire\(/);
+        }
+        assert.equal(run(process.execPath, [runtime], app).trim(), 'consumer completed');
+        console.log(
+          `PASS ${kind}: ${module}/${moduleResolution} ${profile.name}, declarations + runtime (public APIs + native errors)`,
+        );
       }
-      run(process.execPath, [runtime], app);
-      console.log(
-        `PASS ${kind}: ${module}/${moduleResolution}, declarations + runtime (public APIs + native errors)`,
-      );
     }
   }
   assert.deepEqual(installed[0], installed[1], 'Both apps must install the SAME tarball');
@@ -183,6 +221,12 @@ try {
     for (const name of names) assert.equal(esm[name], cjs[name]);
     assert(new esm.Queue() instanceof cjs.Queue);
     assert(new cjs.Queue() instanceof esm.Queue);
+    assert(new esm.TaskQueue() instanceof cjs.TaskQueue);
+    assert(new cjs.TaskQueue() instanceof esm.TaskQueue);
+    for (const name of ['QueueFullError', 'QueueClosedError', 'TaskCancelledError']) {
+      assert(new esm[name]() instanceof cjs[name]);
+      assert(new cjs[name]() instanceof esm[name]);
+    }
     assert(require.resolve('${packageName}').endsWith(['dist', 'index.js'].join(sep)));
     assert(import.meta.resolve('${packageName}').endsWith('/dist/index.mjs'));
     assert.throws(() => require('${packageName}/dist/index.js'), { code: 'ERR_PACKAGE_PATH_NOT_EXPORTED' });
@@ -220,7 +264,8 @@ try {
         target: 'es2021',
         strict: true,
         skipLibCheck: false,
-        types: [],
+        lib: ['es2021'],
+        types: ['node'],
         noEmit: true,
       },
       files: ['identity.mts'],

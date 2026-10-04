@@ -378,7 +378,7 @@ export class IterableMapper<Element, NewElement> implements AsyncIterable<NewEle
   }
 
   private aggregateError(): AggregateError {
-    return new AggregateError(this._errors, this._errors.map(String).join('\n'));
+    return new AggregateError(this._errors, 'One or more mapper operations failed');
   }
 
   private startARunnerIfNeeded() {

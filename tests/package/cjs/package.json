@@ -1,5 +1,8 @@
 {
   "name": "package-consumer-cjs",
   "private": true,
-  "type": "commonjs"
+  "type": "commonjs",
+  "devDependencies": {
+    "@types/node": "22.20.4"
+  }
 }

@@ -255,7 +255,8 @@ Use Node.js 24 and the pnpm version pinned in `package.json`:
 
 ```sh
 nvm use
-npm install --global pnpm@12.7.0
+corepack enable pnpm
+corepack prepare pnpm@12.7.0 --activate
 pnpm install --frozen-lockfile
 pnpm run build
 pnpm run build:docs
@@ -264,7 +265,10 @@ pnpm run test
 pnpm run example:semantic-aliases
 ```
 
-The pnpm configuration requires package releases to be at least seven days old.
+Corepack enforces the pnpm version in `package.json`. pnpm's additional package
+manager switching is disabled to keep the single-document lockfile readable by
+GitHub's dependency graph and Dependabot. The pnpm configuration requires package
+releases to be at least seven days old.
 On macOS, `packageImportMethod: auto` prefers APFS copy-on-write clones from the
 shared pnpm store, so worktrees share package data until a file changes. Keep the
 store on the same APFS volume as the checkout. Other supported filesystems use

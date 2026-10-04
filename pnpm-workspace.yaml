@@ -4,6 +4,9 @@ minimumReleaseAge: 10080
 # Prefer copy-on-write clones on APFS, with hard-link/copy fallback elsewhere.
 packageImportMethod: auto
 
+# Corepack enforces packageManager; keep one v9 lock document for Dependabot.
+pmOnFail: ignore
+
 # Native tooling used by TypeDoc and Jest; all other dependency scripts stay blocked.
 allowBuilds:
   '@parcel/watcher': true

@@ -1,11 +1,25 @@
 /// <reference types="jest" />
 import { IterableQueueMapper } from './iterable-queue-mapper';
-import { promisify } from 'util';
-const sleep = promisify(setTimeout);
+async function sleep<T = void>(ms: number, value?: T): Promise<T> {
+  return new Promise<T>((resolve) => setTimeout(() => resolve(value as T), ms));
+}
 
 async function mapper({ value, ms }: { value: number; ms: number }): Promise<number> {
   await sleep(ms);
   return value;
+}
+
+async function withVirtualTime(test: () => Promise<void>): Promise<void> {
+  jest.useFakeTimers();
+  try {
+    const result = test();
+    // Observe early failures while the virtual clock drives pending work.
+    void result.catch(() => undefined);
+    await jest.runAllTimersAsync();
+    await result;
+  } finally {
+    jest.useRealTimers();
+  }
 }
 
 describe('IterableQueueMapper', () => {
@@ -54,81 +68,85 @@ describe('IterableQueueMapper', () => {
     });
 
     it('right number run in parallel - simple', async () => {
-      const startTime = Date.now();
-      const max = 8;
-      const delayBetweenMs = 200;
-      const input = [
-        { value: 1, ms: delayBetweenMs },
-        { value: 2, ms: delayBetweenMs },
-        { value: 3, ms: delayBetweenMs },
-        { value: 4, ms: delayBetweenMs },
-        { value: 5, ms: delayBetweenMs },
-        { value: 6, ms: delayBetweenMs },
-        { value: 7, ms: delayBetweenMs },
-        { value: 8, ms: delayBetweenMs },
-      ];
-      const prefetcher = new IterableQueueMapper(mapper, { concurrency: 2, maxUnread: 4 });
+      await withVirtualTime(async () => {
+        const startTime = Date.now();
+        const max = 8;
+        const delayBetweenMs = 200;
+        const input = [
+          { value: 1, ms: delayBetweenMs },
+          { value: 2, ms: delayBetweenMs },
+          { value: 3, ms: delayBetweenMs },
+          { value: 4, ms: delayBetweenMs },
+          { value: 5, ms: delayBetweenMs },
+          { value: 6, ms: delayBetweenMs },
+          { value: 7, ms: delayBetweenMs },
+          { value: 8, ms: delayBetweenMs },
+        ];
+        const prefetcher = new IterableQueueMapper(mapper, { concurrency: 2, maxUnread: 4 });
 
-      // Enqueue items in the background
-      void (async () => {
-        for (const item of input) {
-          await prefetcher.enqueue(item);
+        // Enqueue items in the background
+        void (async () => {
+          for (const item of input) {
+            await prefetcher.enqueue(item);
+          }
+          prefetcher.done();
+        })();
+
+        let lastTotal = 0;
+        let loopCount = 0;
+        for await (const item of prefetcher) {
+          loopCount++;
+          if (item > lastTotal) {
+            lastTotal = item;
+          }
         }
-        prefetcher.done();
-      })();
 
-      let lastTotal = 0;
-      let loopCount = 0;
-      for await (const item of prefetcher) {
-        loopCount++;
-        if (item > lastTotal) {
-          lastTotal = item;
-        }
-      }
-
-      expect(loopCount).toBe(max);
-      expect(lastTotal).toBe(max);
-      // Should require at least 4 batches
-      const duration = Date.now() - startTime;
-      expect(Date.now() - startTime).toBeLessThan(5 * delayBetweenMs);
-      expect(Math.ceil(duration)).toBeGreaterThan(4 * delayBetweenMs);
+        expect(loopCount).toBe(max);
+        expect(lastTotal).toBe(max);
+        // Should require at least 4 batches
+        const duration = Date.now() - startTime;
+        expect(Date.now() - startTime).toBeLessThan(5 * delayBetweenMs);
+        expect(Math.ceil(duration)).toBeGreaterThanOrEqual(4 * delayBetweenMs);
+      });
     });
 
     it('right number run in parallel - complex', async () => {
-      const prefetcher = new IterableQueueMapper(mapper, { concurrency: 4, maxUnread: 4 });
-      const delayBetweenMs = 500;
+      await withVirtualTime(async () => {
+        const prefetcher = new IterableQueueMapper(mapper, { concurrency: 4, maxUnread: 4 });
+        const delayBetweenMs = 500;
 
-      // First 4 added should not wait at all
-      const startTime = Date.now();
-      await prefetcher.enqueue({ value: 1, ms: delayBetweenMs });
-      await prefetcher.enqueue({ value: 2, ms: delayBetweenMs });
-      await prefetcher.enqueue({ value: 3, ms: delayBetweenMs });
-      await prefetcher.enqueue({ value: 4, ms: delayBetweenMs });
-      expect(Date.now() - startTime).toBeLessThan(delayBetweenMs);
+        // First 4 added should not wait at all
+        const startTime = Date.now();
+        await prefetcher.enqueue({ value: 1, ms: delayBetweenMs });
+        await prefetcher.enqueue({ value: 2, ms: delayBetweenMs });
+        await prefetcher.enqueue({ value: 3, ms: delayBetweenMs });
+        await prefetcher.enqueue({ value: 4, ms: delayBetweenMs });
+        expect(Date.now() - startTime).toBeLessThan(delayBetweenMs);
 
-      // Next one added should have had to wait for at least one wait period
-      void (async () => {
-        await prefetcher.enqueue({ value: 5, ms: delayBetweenMs });
-        expect(Math.ceil(Date.now() - startTime)).toBeGreaterThanOrEqual(delayBetweenMs);
-        prefetcher.done();
-      })();
+        // Next one added should have had to wait for at least one wait period
+        void (async () => {
+          await prefetcher.enqueue({ value: 5, ms: delayBetweenMs });
+          expect(Math.ceil(Date.now() - startTime)).toBeGreaterThanOrEqual(delayBetweenMs);
+          prefetcher.done();
+        })();
 
-      let lastSeen = 0;
-      let loopCount = 0;
-      for await (const item of prefetcher) {
-        loopCount++;
-        if (item > lastSeen) {
-          lastSeen = item;
+        let lastSeen = 0;
+        let loopCount = 0;
+        for await (const item of prefetcher) {
+          loopCount++;
+          if (item > lastSeen) {
+            lastSeen = item;
+          }
         }
-      }
 
-      expect(loopCount).toBe(5);
-      expect(lastSeen).toBe(5);
+        expect(loopCount).toBe(5);
+        expect(lastSeen).toBe(5);
 
-      // Should require at least 2 batches
-      const duration = Date.now() - startTime;
-      expect(duration).toBeLessThan(2.5 * delayBetweenMs);
-      expect(Math.ceil(duration)).toBeGreaterThanOrEqual(2 * delayBetweenMs);
+        // Should require at least 2 batches
+        const duration = Date.now() - startTime;
+        expect(duration).toBeLessThan(2.5 * delayBetweenMs);
+        expect(Math.ceil(duration)).toBeGreaterThanOrEqual(2 * delayBetweenMs);
+      });
     });
   });
 });

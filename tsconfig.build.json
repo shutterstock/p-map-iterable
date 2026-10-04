@@ -9,7 +9,7 @@
     "declarationMap": false,
     "sourceMap": false,
     "paths": {},
-    "types": []
+    "types": ["node"]
   },
   "include": ["src/**/*.ts", "src/**/*.mts"],
   "exclude": ["src/**/*.test.ts"]

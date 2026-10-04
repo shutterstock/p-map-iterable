@@ -40,7 +40,8 @@ export type IterableQueueMapperOptions = IterableMapperOptions;
  * - Items are added to the queue via the `await enqueue()` method
  * - IMPORTANT: `await enqueue()` method will block until a slot is available, if queue is full
  * - Call `done()` when no more items will be enqueued
- * - IMPORTANT: Always `await onIdle()` to ensure all items are processed
+ * - Consume results concurrently with enqueueing to avoid output-backpressure deadlock
+ * - After `done()`, continue consuming until iteration completes to observe every result or failure
  *
  * @category Enqueue Input
  *

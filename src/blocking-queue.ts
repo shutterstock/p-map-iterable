@@ -14,7 +14,10 @@ export interface BlockingQueueOptions {
 /**
  * Resolve function used to release next() waiters
  */
-type WaiterResolverFunc = (value: unknown) => void;
+type Waiter = {
+  resolve: (value: unknown) => void;
+  reject: (reason: unknown) => void;
+};
 
 /**
  * `enqueue` blocks when the queue is full, until an item is read with `dequeue`, or done
@@ -37,16 +40,18 @@ export class BlockingQueue<Element> {
   // and thus need a queue not just a single item.
   // The items in the queue are 'resolve' functions that we call when an item
   // is ready.
-  private readonly _readersWaiting: Queue<WaiterResolverFunc> = new Queue();
+  private readonly _readersWaiting: Queue<Waiter> = new Queue();
 
   // NOTE: Yes, it is possible to call add() multiple times in parallel (and we
   // have a test that demonstrates that), so we may have multiple writers waiting
   // and thus need a queue not just a single item.
   // The items in the queue are 'resolve' functions that we call when an item
   // is ready.
-  private readonly _writersWaiting: Queue<WaiterResolverFunc> = new Queue();
+  private readonly _writersWaiting: Queue<Waiter> = new Queue();
 
   private _doneAdding = false;
+  private _aborted = false;
+  private _abortReason: unknown;
 
   /**
    * Create a new `BlockingQueue`
@@ -98,11 +103,31 @@ export class BlockingQueue<Element> {
   }
 
   /**
+   * Discard buffered items and reject current and future reads and writes.
+   * Unlike `done()`, abort does not wait for a consumer to drain the queue.
+   */
+  public abort(reason: unknown = new Error('Queue aborted')): void {
+    if (this._aborted) return;
+    this._aborted = true;
+    this._abortReason = reason;
+    this._doneAdding = true;
+    while (this._unreadQueue.length > 0) this._unreadQueue.dequeue();
+    let waiter: Waiter | undefined;
+    while ((waiter = this._readersWaiting.dequeue()) !== undefined) waiter.reject(reason);
+    while ((waiter = this._writersWaiting.dequeue()) !== undefined) waiter.reject(reason);
+  }
+
+  private throwIfAborted(): void {
+    if (this._aborted) throw this._abortReason;
+  }
+
+  /**
    * Add an item to the queue, wait if the queue is full.
    *
    * @param item Element to add
    */
   public async enqueue(item: Element): Promise<void> {
+    this.throwIfAborted();
     if (this._doneAdding) {
       throw new Error('`enqueue` called after `done` called');
     }
@@ -119,12 +144,13 @@ export class BlockingQueue<Element> {
       }
 
       // Resolve the Promise for a waiting reader
-      reader(undefined);
+      reader.resolve(undefined);
     }
 
     if (this._unreadQueue.length > this._options.maxUnread) {
       // We wait if the queue is at max length
       await this.waitForRead();
+      this.throwIfAborted();
     }
   }
 
@@ -134,6 +160,7 @@ export class BlockingQueue<Element> {
    * @returns Element or undefined if queue is empty and `done` has been called
    */
   public async dequeue(): Promise<Element | undefined> {
+    this.throwIfAborted();
     // Bail out and release all waiters if there are no more items coming
     const done = this.areWeDone();
     if (done) {
@@ -150,6 +177,7 @@ export class BlockingQueue<Element> {
     } else {
       // If there are no items and/or there are already waiters, we have to wait for one to be ready
       await this.waitForWrite();
+      this.throwIfAborted();
 
       item = this._unreadQueue.dequeue();
     }
@@ -163,7 +191,7 @@ export class BlockingQueue<Element> {
       }
 
       // Resolve the Promise for a waiting writer
-      writer(undefined);
+      writer.resolve(undefined);
     }
 
     return item;
@@ -171,9 +199,9 @@ export class BlockingQueue<Element> {
 
   private releaseAllReaders() {
     // Release all the waiting readers since we're done
-    let waiter: WaiterResolverFunc | undefined;
+    let waiter: Waiter | undefined;
     while ((waiter = this._readersWaiting.dequeue()) !== undefined) {
-      waiter(undefined);
+      waiter.resolve(undefined);
     }
   }
 
@@ -220,8 +248,8 @@ export class BlockingQueue<Element> {
   private async waitForWrite(): Promise<void> {
     // If there are waiters, create a waiter promise and add to end of list
     // Note: the background reader removes the promise from the readers waiting queue
-    const itemReady = new Promise((resolve) => {
-      this._readersWaiting.enqueue(resolve);
+    const itemReady = new Promise((resolve, reject) => {
+      this._readersWaiting.enqueue({ resolve, reject });
     });
 
     // Wait for our item to be ready
@@ -234,8 +262,8 @@ export class BlockingQueue<Element> {
   private async waitForRead(): Promise<void> {
     // If there are waiters, create a waiter promise and add to end of list
     // Note: the background reader removes the promise from the readers waiting queue
-    const writeReady = new Promise((resolve) => {
-      this._writersWaiting.enqueue(resolve);
+    const writeReady = new Promise((resolve, reject) => {
+      this._writersWaiting.enqueue({ resolve, reject });
     });
 
     // Wait for our turn to add to the queue

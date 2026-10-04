@@ -76,10 +76,7 @@ export type Mapper<Element = unknown, NewElement = unknown> = (
 /**
  * Wraps a new element or caught exception
  */
-type NewElementOrError<NewElement = unknown> = {
-  element?: NewElement;
-  error?: unknown;
-};
+type NewElementOrError<NewElement = unknown> = { element: NewElement } | { error: unknown };
 
 /**
  * Iterates over a source iterable / generator with specified `concurrency`,
@@ -239,9 +236,11 @@ export class IterableMapper<Element, NewElement> implements AsyncIterable<NewEle
   private readonly _errors = [] as Error[];
   private _asyncIterator = false;
   private _isRejected = false;
+  private _terminalError: { error: unknown } | undefined;
+  private _isCancelled = false;
+  private _sourceClose: Promise<void> | undefined;
   private _isIterableDone = false;
   private _activeRunners = 0;
-  private _resolvingCount = 0;
   private _currentIndex = 0;
   private _initialRunnersCreated = false;
 
@@ -352,6 +351,8 @@ export class IterableMapper<Element, NewElement> implements AsyncIterable<NewEle
    * @returns Iterator result
    */
   public async next(): Promise<IteratorResult<NewElement>> {
+    if (this._isCancelled) return { value: undefined, done: true };
+    this.throwIfFailed();
     // Bail out and release all waiters if there are no more items coming
     const done = this.areWeDone();
     if (done) {
@@ -364,7 +365,14 @@ export class IterableMapper<Element, NewElement> implements AsyncIterable<NewEle
     }
 
     // Check if queue has an item
-    const item = await this._unreadQueue.dequeue();
+    let item: NewElementOrError<NewElement> | undefined;
+    try {
+      item = await this._unreadQueue.dequeue();
+    } catch (error) {
+      if (this._isCancelled) return { value: undefined, done: true };
+      this.throwIfFailed();
+      throw error;
+    }
     if (item === undefined) {
       // We finished - There were no more items
       this.bubbleUpErrors();
@@ -374,6 +382,40 @@ export class IterableMapper<Element, NewElement> implements AsyncIterable<NewEle
     this.startARunnerIfNeeded();
 
     return { value: this.throwIfError(item), done: false };
+  }
+
+  /**
+   * Stop prefetching, release pending reads, and close the source iterator.
+   * Called automatically when a `for await` loop exits early. Already running
+   * mapper callbacks may finish, but their results are discarded.
+   */
+  public async return(): Promise<IteratorResult<NewElement>> {
+    this._isCancelled = true;
+    this._isIterableDone = true;
+    this._unreadQueue.abort(new Error('Iteration closed'));
+    await this.closeSource();
+    return { value: undefined, done: true };
+  }
+
+  private async closeSource(): Promise<void> {
+    this._sourceClose ??= (async () => {
+      await this._iterator.return?.();
+    })();
+    await this._sourceClose;
+  }
+
+  private fail(error: unknown): void {
+    if (this._isCancelled || this._terminalError) return;
+    this._terminalError = { error };
+    this._isRejected = true;
+    this._isIterableDone = true;
+    this._unreadQueue.abort(error);
+    // Preserve the primary failure if source cleanup also fails.
+    void this.closeSource().catch(() => undefined);
+  }
+
+  private throwIfFailed(): void {
+    if (this._terminalError) throw this._terminalError.error;
   }
 
   private bubbleUpErrors() {
@@ -394,7 +436,7 @@ export class IterableMapper<Element, NewElement> implements AsyncIterable<NewEle
         // We only create more runners if the source iterable is not already done
         if (this._activeRunners < this._options.concurrency) {
           // We only create runners if we're under the concurrency limit
-          if (this._unreadQueue.length + this._activeRunners <= this._options.maxUnread) {
+          if (this._unreadQueue.length + this._activeRunners < this._options.maxUnread) {
             // We only create runners if the number of runners + unread items will not
             // exceed the unread queue length
 
@@ -411,7 +453,7 @@ export class IterableMapper<Element, NewElement> implements AsyncIterable<NewEle
       throw new TypeError('active runners would be greater than concurrency limit');
     }
 
-    if (this._activeRunners + this._unreadQueue.length > this._options.maxUnread) {
+    if (this._activeRunners + this._unreadQueue.length >= this._options.maxUnread) {
       throw new TypeError('active runners would overflow the read queue limit');
     }
 
@@ -433,14 +475,12 @@ export class IterableMapper<Element, NewElement> implements AsyncIterable<NewEle
   private areWeDone(): boolean {
     if (this._isIterableDone) {
       // The source iterable has no more items
-      if (this._resolvingCount === 0) {
+      if (this._activeRunners === 0) {
         // There are no more resolvers running
-        if (this._unreadQueue.length === 0) {
-          // There are no unread items left
-          this._unreadQueue.done();
-
-          return true;
-        }
+        // No runner can add another result. Mark completion even when buffered
+        // results remain so parallel reads beyond the last item also settle.
+        this._unreadQueue.done();
+        return this._unreadQueue.length === 0;
       }
     }
 
@@ -453,10 +493,8 @@ export class IterableMapper<Element, NewElement> implements AsyncIterable<NewEle
    * @returns Element if no error
    */
   private throwIfError(item: NewElementOrError<NewElement>): NewElement {
-    if (item.error !== undefined) {
+    if ('error' in item) {
       throw item.error;
-    } else if (item.element === undefined) {
-      throw new TypeError('no element was returned');
     }
     return item.element;
   }
@@ -477,50 +515,44 @@ export class IterableMapper<Element, NewElement> implements AsyncIterable<NewEle
    * will exit and will be restarted when an item is read from the queue.
    */
   private async sourceNext() {
-    if (this._isRejected) {
+    if (this._isRejected || this._isCancelled || this._isIterableDone) {
       this._activeRunners--;
+      this.areWeDone();
       return;
     }
 
     // Note: do NOT await a non-async iterable as it will cause next() to be
     // pushed into the event loop, slowing down iteration of non-async iterables.
+    const index = this._currentIndex++;
     let nextItem: IteratorResult<Element>;
     try {
+      let result: IteratorResult<Element>;
       if (this._asyncIterator) {
-        nextItem = await this._iterator.next();
+        result = await this._iterator.next();
       } else {
-        nextItem = (this._iterator as Iterator<Element>).next();
+        result = (this._iterator as Iterator<Element>).next();
       }
+      if (typeof result !== 'object' || result === null) {
+        throw new TypeError('Source iterator next() must return an object');
+      }
+      // Iterator result getters can also throw; report these as source failures.
+      nextItem = result.done
+        ? { value: undefined, done: true }
+        : { value: result.value, done: false };
     } catch (error) {
       // Iterator protocol / Iterables can throw exceptions - If this happens we have to just stop
       // regardless of stopOnMapperError since we can't iterate any additional items
-      this._isRejected = true;
       this._activeRunners--;
-
-      // Push the error onto the unread queue, to be rethrown by next()
-      await this._unreadQueue.enqueue({ error });
-
+      this.fail(error);
       return;
     }
-
-    const index = this._currentIndex;
-    this._currentIndex++;
 
     if (nextItem.done) {
       this._isIterableDone = true;
-
-      // If there are no active resolvers, then release all the waiters
-      if (this._resolvingCount === 0) {
-        // At this point the only waiters in the queue are not going to get an item
-        // as there are no source items left
-        this._unreadQueue.done();
-      }
-
       this._activeRunners--;
+      this.areWeDone();
       return;
     }
-
-    this._resolvingCount++;
 
     // This is created as a detached, non-awaited async
     // to allow next() to return while the async mapper is awaited.
@@ -535,13 +567,17 @@ export class IterableMapper<Element, NewElement> implements AsyncIterable<NewEle
       try {
         const element = nextItem.value;
 
-        if (this._isRejected) {
+        if (this._isRejected || this._isCancelled) {
           this._activeRunners--;
           return;
         }
 
         const value = await this._mapper(element, index);
-        this._resolvingCount--;
+
+        if (this._isRejected || this._isCancelled) {
+          this._activeRunners--;
+          return;
+        }
 
         // if (value === pMapSkip) {
         //   skippedIndexes.push(index);
@@ -553,19 +589,18 @@ export class IterableMapper<Element, NewElement> implements AsyncIterable<NewEle
         await this._unreadQueue.enqueue({ element: value });
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (error: any) {
-        if (this._options.stopOnMapperError) {
-          this._isRejected = true;
+        if (this._isRejected || this._isCancelled) {
           this._activeRunners--;
-
-          // Push the error onto the unread queue, to be rethrown by next()
-          await this._unreadQueue.enqueue({ error });
-
-          // Fall through to release a reader
+          return;
+        }
+        if (this._options.stopOnMapperError) {
+          this._activeRunners--;
+          this.fail(error);
+          return;
         } else {
           // Collect the error but do not stop iterating
           // These will be thrown in an AggregateError at the end
           this._errors.push(error);
-          this._resolvingCount--;
 
           await this.sourceNext();
 

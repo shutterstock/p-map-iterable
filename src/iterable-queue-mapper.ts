@@ -78,7 +78,19 @@ export class IterableQueueMapper<Element, NewElement> implements AsyncIterable<N
    * @returns Iterator result
    */
   public async next(): Promise<IteratorResult<NewElement>> {
-    return this._iterableMapper.next();
+    try {
+      return await this._iterableMapper.next();
+    } catch (error) {
+      this._sourceIterable.abort(error);
+      throw error;
+    }
+  }
+
+  /** Stop consuming and reject producers waiting to enqueue more input. */
+  public async return(): Promise<IteratorResult<NewElement>> {
+    const closed = this._iterableMapper.return();
+    this._sourceIterable.abort(new Error('Iteration closed'));
+    return closed;
   }
 
   /**

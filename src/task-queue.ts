@@ -1,9 +1,9 @@
 /** A lazy operation. The concurrency slot covers its entire returned promise. */
 export type Task<T> = (signal: AbortSignal) => T | PromiseLike<T>;
 
-/** Explicit outcomes keep event submissions safe when their results are ignored. */
+/** Outcomes contain fully awaited values and keep ignored event results nonrejecting. */
 export type TaskOutcome<T> =
-  { status: 'fulfilled'; value: T } | { status: 'rejected'; reason: unknown };
+  { status: 'fulfilled'; value: Awaited<T> } | { status: 'rejected'; reason: unknown };
 
 export interface TaskHandle<T> {
   /** Always resolves, including task failure and queued cancellation. */
@@ -149,7 +149,8 @@ export class TaskQueue {
             return task(controller.signal);
           })
           .then(
-            (value) => finish({ status: 'fulfilled', value }),
+            // Native promises assimilate T; Promise.then's type keeps the raw generic.
+            (value) => finish({ status: 'fulfilled', value: value as Awaited<T> }),
             (reason: unknown) => finish({ status: 'rejected', reason }),
           );
       },
@@ -176,8 +177,8 @@ export class TaskQueue {
     return { result, cancel: entry.cancel };
   }
 
-  /** Conventional value/rejection promise, including rejected admission. Handle rejections. */
-  public async add<T>(task: Task<T>, options: TaskOptions = {}): Promise<T> {
+  /** Fully awaited value/rejection promise, including rejected admission. Handle rejections. */
+  public async add<T>(task: Task<T>, options: TaskOptions = {}): Promise<Awaited<T>> {
     const outcome = await this.submit(task, options).result;
     if (outcome.status === 'rejected') throw outcome.reason;
     return outcome.value;

@@ -274,15 +274,6 @@ export class IterableMapper<Element, NewElement> implements AsyncIterable<NewEle
       throw new TypeError('Mapper function is required');
     }
 
-    // Avoid undefined errors on options
-    if (
-      this._options.concurrency === undefined ||
-      this._options.stopOnMapperError === undefined ||
-      this._options.maxUnread === undefined
-    ) {
-      throw new TypeError('Options are malformed after init');
-    }
-
     // Validate concurrency option
     if (!(
       (Number.isSafeInteger(this._options.concurrency) ||
@@ -401,39 +392,14 @@ export class IterableMapper<Element, NewElement> implements AsyncIterable<NewEle
         if (this._activeRunners < this._options.concurrency) {
           // We only create runners if we're under the concurrency limit
           if (this._unreadQueue.length + this._activeRunners <= this._options.maxUnread) {
-            // We only create runners if the number of runners + unread items will not
-            // exceed the unread queue length
-
-            // Start another source runner, but do not await it
-            this.startAnotherRunner();
+            // The eligibility checks above and reservation below run synchronously.
+            // Reserve the slot before starting asynchronous source work.
+            this._activeRunners++;
+            void this.sourceNext();
           }
         }
       }
     }
-  }
-
-  private startAnotherRunner() {
-    if (this._activeRunners === this._options.concurrency) {
-      throw new TypeError('active runners would be greater than concurrency limit');
-    }
-
-    if (this._activeRunners + this._unreadQueue.length > this._options.maxUnread) {
-      throw new TypeError('active runners would overflow the read queue limit');
-    }
-
-    if (this._isIterableDone) {
-      throw new TypeError('runner should not be started when iterable is already done');
-    }
-
-    if (this._activeRunners < 0) {
-      throw new TypeError('active runners is less than 0');
-    }
-
-    // We only create runners if the number of runners + unread items will not
-    // exceed the unread queue length
-    this._activeRunners++;
-    // Start another source runner, but do not await it
-    void this.sourceNext();
   }
 
   private areWeDone(): boolean {

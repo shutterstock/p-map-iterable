@@ -1,5 +1,5 @@
 /// <reference types="jest" />
-import { BlockingQueue } from './blocking-queue';
+import { BlockingQueue } from './index';
 
 describe('BlockingQueue', () => {
   beforeAll(() => {
@@ -11,6 +11,15 @@ describe('BlockingQueue', () => {
   });
 
   describe('constructor', () => {
+    it.each([Number.NaN, Number.NEGATIVE_INFINITY, Number.MAX_SAFE_INTEGER + 1])(
+      'rejects an invalid maxUnread of %p',
+      (maxUnread) => {
+        expect(() => new BlockingQueue({ maxUnread })).toThrow(
+          /Expected `maxUnread` to be an integer/,
+        );
+      },
+    );
+
     test('should throw TypeError if maxUnread is not a valid integer or Infinity', () => {
       expect(() => {
         new BlockingQueue({ maxUnread: -1 });
@@ -23,6 +32,26 @@ describe('BlockingQueue', () => {
   });
 
   describe('producer backpressure and shutdown', () => {
+    it.each([0, 1, 4])(
+      'serves waiting readers and producers in FIFO order with maxUnread=%p',
+      async (maxUnread) => {
+        const queue = new BlockingQueue<number>({ maxUnread });
+        const reads = [queue.dequeue(), queue.dequeue(), queue.dequeue()];
+        const accepted: number[] = [];
+        const writes = [1, 2, 3].map(async (value) => {
+          await queue.enqueue(value);
+          accepted.push(value);
+        });
+        queue.done();
+
+        await expect(Promise.all(reads)).resolves.toEqual([1, 2, 3]);
+        await Promise.all(writes);
+        expect(accepted).toEqual([1, 2, 3]);
+        expect(queue.length).toBe(0);
+        await expect(queue.dequeue()).resolves.toBeUndefined();
+      },
+    );
+
     it.each([undefined, { maxUnread: undefined }])(
       'uses the default buffer when options are %p',
       async (options) => {

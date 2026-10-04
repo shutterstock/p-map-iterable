@@ -57,11 +57,6 @@ export class BlockingQueue<Element> {
     const { maxUnread = 8 } = options;
     this._options = { maxUnread };
 
-    // Avoid undefined errors on options
-    if (this._options.maxUnread === undefined) {
-      throw new TypeError('`maxUnread` must be set');
-    }
-
     // Validate maxUnread option
     if (!(
       (Number.isSafeInteger(this._options.maxUnread) ||
@@ -110,15 +105,9 @@ export class BlockingQueue<Element> {
     // We always add to the internal queue, we just wait to return if the queue is full
     this._unreadQueue.enqueue(item);
 
-    if (this._readersWaiting.length > 0) {
-      // Release a reader if one is waiting for an item
-      // Remove the first waiting reader Promise from the queue
-      const reader = this._readersWaiting.dequeue();
-      if (reader === undefined) {
-        throw new TypeError('reader queue returned undefined');
-      }
-
-      // Resolve the Promise for a waiting reader
+    // Take the oldest reader if one is waiting; an empty queue returns undefined.
+    const reader = this._readersWaiting.dequeue();
+    if (reader !== undefined) {
       reader(undefined);
     }
 
@@ -154,15 +143,9 @@ export class BlockingQueue<Element> {
       item = this._unreadQueue.dequeue();
     }
 
-    if (this._writersWaiting.length > 0) {
-      // Release a writer if one is waiting
-      // Remove the first waiting reader Promise from the queue
-      const writer = this._writersWaiting.dequeue();
-      if (writer === undefined) {
-        throw new TypeError('writer queue returned undefined');
-      }
-
-      // Resolve the Promise for a waiting writer
+    // Take the oldest writer if one is waiting; an empty queue returns undefined.
+    const writer = this._writersWaiting.dequeue();
+    if (writer !== undefined) {
       writer(undefined);
     }
 

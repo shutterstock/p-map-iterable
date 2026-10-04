@@ -1,10 +1,7 @@
 /// <reference types="jest" />
-import { Queue } from './queue';
+import { Queue } from './index';
 
 describe('Queue', () => {
-  // const sourceNextSpy = jest.spyOn(pMapIterable.prototype as any, 'sourceNext');
-  // const startAnotherRunnerSpy = jest.spyOn(pMapIterable.prototype as any, 'startAnotherRunner');
-
   beforeAll(() => {
     // nothing
   });

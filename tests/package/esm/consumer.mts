@@ -82,6 +82,32 @@ async function exerciseTaskQueue(): Promise<void> {
   const value: number = await queue.add(() => 11);
   check(value === 11);
 
+  const promisedTask: Task<Promise<number>> = () => Promise.resolve(21);
+  const promisedHandle: TaskHandle<Promise<number>> = queue.submit<Promise<number>>(promisedTask);
+  const promisedAdded: Promise<number> = queue.add<Promise<number>>(promisedTask);
+  const promisedOutcome: TaskOutcome<Promise<number>> = await promisedHandle.result;
+  check(promisedOutcome.status === 'fulfilled');
+  if (promisedOutcome.status === 'fulfilled') {
+    const resolved: number = promisedOutcome.value;
+    check(resolved === 21);
+  }
+  check((await promisedAdded) === 21);
+  await queue.onIdle();
+
+  const nestedTask: Task<PromiseLike<PromiseLike<number>>> = () =>
+    new Promise<Promise<number>>((resolve) => resolve(Promise.resolve(22)));
+  const nestedHandle: TaskHandle<PromiseLike<PromiseLike<number>>> =
+    queue.submit<PromiseLike<PromiseLike<number>>>(nestedTask);
+  const nestedAdded: Promise<number> = queue.add<PromiseLike<PromiseLike<number>>>(nestedTask);
+  const nestedOutcome: TaskOutcome<PromiseLike<PromiseLike<number>>> = await nestedHandle.result;
+  check(nestedOutcome.status === 'fulfilled');
+  if (nestedOutcome.status === 'fulfilled') {
+    const resolved: number = nestedOutcome.value;
+    check(resolved === 22);
+  }
+  check((await nestedAdded) === 22);
+  await queue.onIdle();
+
   const failure = new Error('task failure');
   const failed: TaskHandle<number> = queue.submit(() => Promise.reject(failure));
   const failedOutcome = await failed.result;

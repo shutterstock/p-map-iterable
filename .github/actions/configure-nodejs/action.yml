@@ -1,5 +1,5 @@
 name: 'Configure Node.js'
-description: 'Install Node.js and install Node.js modules or restore cache'
+description: 'Use the official configure-nodejs action with the manifest-pinned pnpm version'
 
 inputs:
   node-version:
@@ -12,23 +12,8 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    - uses: actions/setup-node@v7
+    - uses: pwrdrvr/configure-nodejs@f51ed2be76fbdf3e3374478ef5cd59a7687434ec # v1.5.0
       with:
         node-version: ${{ inputs.node-version }}
-        package-manager-cache: false
-
-    - name: Restore Node Modules from Cache
-      id: cache-node-modules
-      uses: actions/cache@v6
-      with:
-        path: |
-          node_modules
-          packages/**/node_modules
-          !node_modules/.cache
-        key: node-modules-${{ inputs.node-version }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package.json', 'package-lock.json', '**/package-lock.json') }}
+        package-manager: pnpm
         lookup-only: ${{ inputs.lookup-only }}
-
-    - name: Install dependencies
-      if: steps.cache-node-modules.outputs.cache-hit != 'true'
-      shell: bash
-      run: npm ci

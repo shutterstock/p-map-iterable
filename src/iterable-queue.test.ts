@@ -1,5 +1,5 @@
 /// <reference types="jest" />
-import { IterableQueue } from './iterable-queue';
+import { IterableQueue } from './index';
 
 async function withVirtualTime(test: () => Promise<void>): Promise<void> {
   jest.useFakeTimers();

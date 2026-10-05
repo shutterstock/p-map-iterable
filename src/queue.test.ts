@@ -1,10 +1,7 @@
 /// <reference types="jest" />
-import { Queue } from './queue';
+import { Queue } from './index';
 
 describe('Queue', () => {
-  // const sourceNextSpy = jest.spyOn(pMapIterable.prototype as any, 'sourceNext');
-  // const startAnotherRunnerSpy = jest.spyOn(pMapIterable.prototype as any, 'startAnotherRunner');
-
   beforeAll(() => {
     // nothing
   });
@@ -16,6 +13,23 @@ describe('Queue', () => {
   it('dequeue empty returns undefined', () => {
     const q = new Queue<string>();
     expect(q.dequeue()).toBeUndefined();
+  });
+
+  it('remains reusable after repeated empty dequeues', () => {
+    const q = new Queue<number>();
+    for (let cycle = 0; cycle < 3; cycle++) {
+      for (let miss = 0; miss < 3; miss++) {
+        expect(q.dequeue()).toBeUndefined();
+        expect(q.length).toBe(0);
+      }
+      q.enqueue(cycle * 2);
+      q.enqueue(cycle * 2 + 1);
+      expect(q.length).toBe(2);
+      expect(q.dequeue()).toBe(cycle * 2);
+      expect(q.length).toBe(1);
+      expect(q.dequeue()).toBe(cycle * 2 + 1);
+      expect(q.length).toBe(0);
+    }
   });
 
   it('enqueue undefined throws', () => {

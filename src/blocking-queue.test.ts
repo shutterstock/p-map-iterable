@@ -1,5 +1,9 @@
 /// <reference types="jest" />
-import { BlockingQueue } from './blocking-queue';
+import { BlockingQueue } from './index';
+
+async function nextTurn(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve));
+}
 
 describe('BlockingQueue', () => {
   beforeAll(() => {
@@ -11,6 +15,15 @@ describe('BlockingQueue', () => {
   });
 
   describe('constructor', () => {
+    it.each([Number.NaN, Number.NEGATIVE_INFINITY, Number.MAX_SAFE_INTEGER + 1])(
+      'rejects an invalid maxUnread of %p',
+      (maxUnread) => {
+        expect(() => new BlockingQueue({ maxUnread })).toThrow(
+          /Expected `maxUnread` to be an integer/,
+        );
+      },
+    );
+
     test('should throw TypeError if maxUnread is not a valid integer or Infinity', () => {
       expect(() => {
         new BlockingQueue({ maxUnread: -1 });
@@ -19,6 +32,200 @@ describe('BlockingQueue', () => {
       expect(() => {
         new BlockingQueue({ maxUnread: 1.5 });
       }).toThrow(TypeError);
+    });
+  });
+
+  describe('producer backpressure and shutdown', () => {
+    it.each([0, 1])(
+      'wakes exactly one waiting reader per enqueue with maxUnread=%p',
+      async (maxUnread) => {
+        const queue = new BlockingQueue<number>({ maxUnread });
+        const received: [number, number | undefined][] = [];
+        const read = async (index: number) => {
+          const value = await queue.dequeue();
+          received.push([index, value]);
+          return value;
+        };
+        const reads = [read(0), read(1), read(2)];
+        await nextTurn();
+        expect(received).toEqual([]);
+
+        for (const value of [1, 2, 3]) {
+          const write = queue.enqueue(value);
+          await nextTurn();
+          expect(received).toEqual(Array.from({ length: value }, (_, index) => [index, index + 1]));
+          expect(queue.length).toBe(0);
+          await write;
+        }
+        await expect(Promise.all(reads)).resolves.toEqual([1, 2, 3]);
+
+        // Enqueue without a waiting reader, then register new readers after draining.
+        const ahead = queue.enqueue(4);
+        await expect(queue.dequeue()).resolves.toBe(4);
+        await ahead;
+        const laterReads = [read(3), read(4)];
+        const write = queue.enqueue(5);
+        await nextTurn();
+        expect(received).toEqual([
+          [0, 1],
+          [1, 2],
+          [2, 3],
+          [3, 5],
+        ]);
+        await write;
+
+        // The last reader must still be blocked until shutdown releases it.
+        queue.done();
+        await expect(Promise.all(laterReads)).resolves.toEqual([5, undefined]);
+        expect(received).toEqual([
+          [0, 1],
+          [1, 2],
+          [2, 3],
+          [3, 5],
+          [4, undefined],
+        ]);
+        await expect(queue.dequeue()).resolves.toBeUndefined();
+      },
+    );
+
+    it.each([0, 1, 3])(
+      'releases exactly one blocked producer per dequeue with maxUnread=%p',
+      async (maxUnread) => {
+        const queue = new BlockingQueue<number>({ maxUnread });
+        for (let value = 1; value <= maxUnread; value++) await queue.enqueue(value);
+        const accepted: number[] = [];
+        const blockedValues = [maxUnread + 1, maxUnread + 2, maxUnread + 3];
+        const writes = blockedValues.map(async (value) => {
+          await queue.enqueue(value);
+          accepted.push(value);
+        });
+        await nextTurn();
+        expect(accepted).toEqual([]);
+
+        for (let index = 0; index < writes.length; index++) {
+          await expect(queue.dequeue()).resolves.toBe(index + 1);
+          await nextTurn();
+          expect(accepted).toEqual(blockedValues.slice(0, index + 1));
+          await writes[index];
+        }
+        await Promise.all(writes);
+
+        // Drain without waiting producers, then fill the buffer and block a new one.
+        for (let value = 4; value <= maxUnread + 3; value++) {
+          await expect(queue.dequeue()).resolves.toBe(value);
+        }
+        const refill = Array.from({ length: maxUnread }, (_, index) => 100 + index);
+        for (const value of refill) await queue.enqueue(value);
+        const laterValue = 100 + maxUnread;
+        const laterWrite = (async () => {
+          await queue.enqueue(laterValue);
+          accepted.push(laterValue);
+        })();
+        await nextTurn();
+        expect(accepted).toEqual(blockedValues);
+
+        await expect(queue.dequeue()).resolves.toBe(maxUnread === 0 ? laterValue : refill[0]);
+        await nextTurn();
+        expect(accepted).toEqual([...blockedValues, laterValue]);
+        await laterWrite;
+        queue.done();
+        if (maxUnread > 0) {
+          for (const value of [...refill.slice(1), laterValue]) {
+            await expect(queue.dequeue()).resolves.toBe(value);
+          }
+        }
+        expect(queue.length).toBe(0);
+        await expect(queue.dequeue()).resolves.toBeUndefined();
+      },
+    );
+
+    it.each([0, 1, 4])(
+      'serves waiting readers and producers in FIFO order with maxUnread=%p',
+      async (maxUnread) => {
+        const queue = new BlockingQueue<number>({ maxUnread });
+        const reads = [queue.dequeue(), queue.dequeue(), queue.dequeue()];
+        const accepted: number[] = [];
+        const writes = [1, 2, 3].map(async (value) => {
+          await queue.enqueue(value);
+          accepted.push(value);
+        });
+        queue.done();
+
+        await expect(Promise.all(reads)).resolves.toEqual([1, 2, 3]);
+        await Promise.all(writes);
+        expect(accepted).toEqual([1, 2, 3]);
+        expect(queue.length).toBe(0);
+        await expect(queue.dequeue()).resolves.toBeUndefined();
+      },
+    );
+
+    it.each([undefined, { maxUnread: undefined }])(
+      'uses the default buffer when options are %p',
+      async (options) => {
+        const queue = new BlockingQueue<number>(options);
+        for (let value = 1; value <= 8; value++) await queue.enqueue(value);
+
+        const accepted = jest.fn();
+        const ninth = queue.enqueue(9).then(accepted);
+        await Promise.resolve();
+        expect(accepted).not.toHaveBeenCalled();
+
+        expect(await queue.dequeue()).toBe(1);
+        await ninth;
+        expect(accepted).toHaveBeenCalledTimes(1);
+        queue.done();
+
+        const remaining = [];
+        for (let value = 2; value <= 9; value++) remaining.push(await queue.dequeue());
+        expect(remaining).toEqual([2, 3, 4, 5, 6, 7, 8, 9]);
+        await expect(queue.dequeue()).resolves.toBeUndefined();
+      },
+    );
+
+    it('allows an unlimited buffer and drains it in FIFO order after done', async () => {
+      const queue = new BlockingQueue<number>({ maxUnread: Number.POSITIVE_INFINITY });
+      const values = Array.from({ length: 20 }, (_, index) => index);
+      await Promise.all(values.map(async (value) => queue.enqueue(value)));
+      expect(queue.length).toBe(values.length);
+      queue.done();
+
+      const results = await Promise.all(values.map(async () => queue.dequeue()));
+      expect(results).toEqual(values);
+      expect(queue.length).toBe(0);
+      await expect(queue.dequeue()).resolves.toBeUndefined();
+      await expect(queue.enqueue(20)).rejects.toThrow('`enqueue` called after `done` called');
+    });
+
+    it('closes a zero-buffer queue without losing already blocked enqueues', async () => {
+      const queue = new BlockingQueue<number>({ maxUnread: 0 });
+      const accepted: number[] = [];
+      const writes = [1, 2, 3].map(async (value) => {
+        await queue.enqueue(value);
+        accepted.push(value);
+      });
+      await Promise.resolve();
+      expect(accepted).toEqual([]);
+      queue.done();
+      await expect(queue.enqueue(4)).rejects.toThrow('`enqueue` called after `done` called');
+
+      for (const value of [1, 2, 3]) {
+        expect(await queue.dequeue()).toBe(value);
+        await writes[value - 1];
+        expect(accepted).toEqual(Array.from({ length: value }, (_, index) => index + 1));
+      }
+      await Promise.all(writes);
+      await expect(queue.dequeue()).resolves.toBeUndefined();
+    });
+
+    it('releases every reader waiting on an empty queue when closed repeatedly', async () => {
+      const queue = new BlockingQueue<number>();
+      const reads = [queue.dequeue(), queue.dequeue(), queue.dequeue()];
+      queue.done();
+      queue.done();
+
+      await expect(Promise.all(reads)).resolves.toEqual([undefined, undefined, undefined]);
+      await expect(queue.dequeue()).resolves.toBeUndefined();
+      await expect(queue.enqueue(1)).rejects.toThrow('`enqueue` called after `done` called');
     });
   });
 

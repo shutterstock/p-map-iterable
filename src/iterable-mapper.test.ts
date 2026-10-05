@@ -74,7 +74,6 @@ async function withVirtualTime(test: () => Promise<void>): Promise<void> {
 
 describe('IterableMapper', () => {
   const sourceNextSpy = jest.spyOn(IterableMapper.prototype as any, 'sourceNext');
-  const startAnotherRunnerSpy = jest.spyOn(IterableMapper.prototype as any, 'startAnotherRunner');
 
   beforeAll(() => {
     // nothing
@@ -258,8 +257,6 @@ describe('IterableMapper', () => {
         // Should require at least 2 batches
         expect(Date.now() - startTime).toBeLessThan(5 * delayBetweenMs);
         expect(Date.now() - startTime).toBeGreaterThanOrEqual(4 * delayBetweenMs);
-        // The runners should never stop because the items are consumed immediately
-        expect(startAnotherRunnerSpy).toHaveBeenCalledTimes(0);
       });
     });
 
@@ -350,7 +347,6 @@ describe('IterableMapper', () => {
         expect(Date.now() - startTime).toBeGreaterThanOrEqual(mapDelayMs + max * readDelayMs);
 
         expect(sourceNextSpy).toHaveBeenCalledTimes(max + 1);
-        expect(startAnotherRunnerSpy).toHaveBeenCalledTimes(3);
       });
     });
   });

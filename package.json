@@ -1,6 +1,7 @@
 {
   "name": "@shutterstock/p-map-iterable",
   "version": "0.0.0",
+  "packageManager": "pnpm@12.7.0",
   "description": "Concurrent mapping and queued background work with backpressure, streaming results, and collected errors",
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",

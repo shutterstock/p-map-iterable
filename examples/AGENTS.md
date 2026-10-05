@@ -5,10 +5,10 @@ Read the [root guide](../AGENTS.md). Check the
 
 | File | Shows | Command |
 | --- | --- | --- |
-| [iterable-mapper.ts](iterable-mapper.ts) | Prefetch from an async source. Consume results with backpressure. | `npm run example:iterable-mapper` |
-| [iterable-queue-mapper.ts](iterable-queue-mapper.ts) | Queue inputs while consuming results. Collect mapper failures at the end. | `npm run example:iterable-queue-mapper` |
-| [iterable-queue-mapper-simple.ts](iterable-queue-mapper-simple.ts) | Run a fixed worker. Discard results and inspect errors after shutdown. | `npm run example:iterable-queue-mapper-simple` |
-| [semantic-aliases.ts](semantic-aliases.ts) | Use `ConcurrentMapper`, `MappingQueue`, and `WorkerQueue`. | `npm run example:semantic-aliases` |
+| [iterable-mapper.ts](iterable-mapper.ts) | Prefetch from an async source. Consume results with backpressure. | `pnpm run example:iterable-mapper` |
+| [iterable-queue-mapper.ts](iterable-queue-mapper.ts) | Queue inputs while consuming results. Collect mapper failures at the end. | `pnpm run example:iterable-queue-mapper` |
+| [iterable-queue-mapper-simple.ts](iterable-queue-mapper-simple.ts) | Run a fixed worker. Discard results and inspect errors after shutdown. | `pnpm run example:iterable-queue-mapper-simple` |
+| [semantic-aliases.ts](semantic-aliases.ts) | Use `ConcurrentMapper`, `MappingQueue`, and `WorkerQueue`. | `pnpm run example:semantic-aliases` |
 
 Run commands from the repository root. The scripts use `ts-node` and
 `tsconfig-paths`. Imports from `@shutterstock/p-map-iterable` resolve to local
@@ -24,4 +24,4 @@ call `onIdle()` only after production ends, then inspect `errors`.
 
 The examples simulate I/O with timers. Some use random delays and intentional
 errors. They are usage demos, not benchmarks or substitutes for tests. Run the
-changed example and `npm run build` when editing its TypeScript code.
+changed example and `pnpm run build` when editing its TypeScript code.

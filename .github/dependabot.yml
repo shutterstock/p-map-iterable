@@ -1,0 +1,123 @@
+version: 2
+
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '09:00'
+      timezone: America/New_York
+    open-pull-requests-limit: 5
+    labels: []
+    versioning-strategy: increase-if-necessary
+    commit-message:
+      prefix: chore
+      include: scope
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
+    # Keep the CJS production dependency until the planned 2.x ESM migration.
+    ignore:
+      - dependency-name: aggregate-error
+        update-types: [version-update:semver-major]
+    groups:
+      npm-production-minor-patch:
+        dependency-type: production
+        patterns: ['*']
+        update-types: [minor, patch]
+      npm-development-minor-patch:
+        dependency-type: development
+        patterns: ['*']
+        update-types: [minor, patch]
+
+  # This target becomes available after the owner cuts releases/1.1 from the
+  # refreshed 1.1.x main. Add equivalent entries when another train is cut.
+  - package-ecosystem: npm
+    directory: /
+    target-branch: releases/1.1
+    schedule:
+      interval: weekly
+      day: monday
+      time: '09:00'
+      timezone: America/New_York
+    open-pull-requests-limit: 5
+    labels: []
+    versioning-strategy: increase-if-necessary
+    commit-message:
+      prefix: chore
+      include: scope
+    cooldown:
+      default-days: 7
+    ignore:
+      - dependency-name: '*'
+        update-types: [version-update:semver-major]
+    groups:
+      npm-production-minor-patch:
+        dependency-type: production
+        patterns: ['*']
+        update-types: [minor, patch]
+      npm-development-minor-patch:
+        dependency-type: development
+        patterns: ['*']
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: tuesday
+      time: '09:00'
+      timezone: America/New_York
+    open-pull-requests-limit: 3
+    labels: []
+    commit-message:
+      prefix: chore
+      include: scope
+    cooldown:
+      default-days: 7
+    # Only floating major tags already receive minor and patch releases.
+    # Keep SHA-pinned configure-nodejs eligible for all release updates.
+    ignore:
+      - dependency-name: actions/checkout
+        update-types: [version-update:semver-minor, version-update:semver-patch]
+      - dependency-name: actions/setup-node
+        update-types: [version-update:semver-minor, version-update:semver-patch]
+      - dependency-name: actions/upload-artifact
+        update-types: [version-update:semver-minor, version-update:semver-patch]
+      - dependency-name: peter-evans/find-comment
+        update-types: [version-update:semver-minor, version-update:semver-patch]
+      - dependency-name: peter-evans/create-or-update-comment
+        update-types: [version-update:semver-minor, version-update:semver-patch]
+      - dependency-name: peaceiris/actions-gh-pages
+        update-types: [version-update:semver-minor, version-update:semver-patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: releases/1.1
+    schedule:
+      interval: weekly
+      day: tuesday
+      time: '09:00'
+      timezone: America/New_York
+    open-pull-requests-limit: 3
+    labels: []
+    commit-message:
+      prefix: chore
+      include: scope
+    cooldown:
+      default-days: 7
+    # Match main: ignore minor/patch changes only for floating major tags.
+    ignore:
+      - dependency-name: actions/checkout
+        update-types: [version-update:semver-minor, version-update:semver-patch]
+      - dependency-name: actions/setup-node
+        update-types: [version-update:semver-minor, version-update:semver-patch]
+      - dependency-name: actions/upload-artifact
+        update-types: [version-update:semver-minor, version-update:semver-patch]
+      - dependency-name: peter-evans/find-comment
+        update-types: [version-update:semver-minor, version-update:semver-patch]
+      - dependency-name: peter-evans/create-or-update-comment
+        update-types: [version-update:semver-minor, version-update:semver-patch]
+      - dependency-name: peaceiris/actions-gh-pages
+        update-types: [version-update:semver-minor, version-update:semver-patch]

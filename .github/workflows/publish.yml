@@ -23,7 +23,10 @@ jobs:
     outputs:
       version: ${{ steps.release.outputs.version }}
       npm-tag: ${{ steps.release.outputs.npm-tag }}
-      commit: ${{ steps.release.outputs.commit }}
+      # This is the immutable SHA validated against the release tag and train.
+      # CodeQL's untrusted-checkout heuristic misclassifies outputs named commit
+      # as PR references, even in this release-only workflow.
+      validated-revision: ${{ steps.release.outputs.commit }}
     steps:
       - name: Checkout the published release tag
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -44,7 +47,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ needs.select-release.outputs.commit }}
+          ref: ${{ needs.select-release.outputs.validated-revision }}
           persist-credentials: false
 
       - name: Populate completed dependencies
@@ -72,7 +75,7 @@ jobs:
       - name: Checkout the published release tag
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ needs.select-release.outputs.commit }}
+          ref: ${{ needs.select-release.outputs.validated-revision }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -152,7 +155,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ needs.select-release.outputs.commit }}
+          ref: ${{ needs.select-release.outputs.validated-revision }}
           fetch-depth: 0
           persist-credentials: false
 

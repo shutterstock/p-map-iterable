@@ -98,7 +98,7 @@ select the same source commit, action SHA, runners, and cache inputs. Completed
 modes must not pass `lookup-only`.
 
 The CI examples pin `github.sha`; actual publication retains the validated
-`needs.select-release.outputs.commit` for every downstream checkout.
+`needs.select-release.outputs.validated-revision` for every downstream checkout.
 
 ```yaml
 env:

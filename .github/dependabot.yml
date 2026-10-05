@@ -76,9 +76,20 @@ updates:
       include: scope
     cooldown:
       default-days: 7
-    # Floating major action tags already receive minor and patch releases.
+    # Only floating major tags already receive minor and patch releases.
+    # Keep SHA-pinned configure-nodejs eligible for all release updates.
     ignore:
-      - dependency-name: '*'
+      - dependency-name: actions/checkout
+        update-types: [version-update:semver-minor, version-update:semver-patch]
+      - dependency-name: actions/setup-node
+        update-types: [version-update:semver-minor, version-update:semver-patch]
+      - dependency-name: actions/upload-artifact
+        update-types: [version-update:semver-minor, version-update:semver-patch]
+      - dependency-name: peter-evans/find-comment
+        update-types: [version-update:semver-minor, version-update:semver-patch]
+      - dependency-name: peter-evans/create-or-update-comment
+        update-types: [version-update:semver-minor, version-update:semver-patch]
+      - dependency-name: peaceiris/actions-gh-pages
         update-types: [version-update:semver-minor, version-update:semver-patch]
 
   - package-ecosystem: github-actions
@@ -96,6 +107,17 @@ updates:
       include: scope
     cooldown:
       default-days: 7
+    # Match main: ignore minor/patch changes only for floating major tags.
     ignore:
-      - dependency-name: '*'
+      - dependency-name: actions/checkout
+        update-types: [version-update:semver-minor, version-update:semver-patch]
+      - dependency-name: actions/setup-node
+        update-types: [version-update:semver-minor, version-update:semver-patch]
+      - dependency-name: actions/upload-artifact
+        update-types: [version-update:semver-minor, version-update:semver-patch]
+      - dependency-name: peter-evans/find-comment
+        update-types: [version-update:semver-minor, version-update:semver-patch]
+      - dependency-name: peter-evans/create-or-update-comment
+        update-types: [version-update:semver-minor, version-update:semver-patch]
+      - dependency-name: peaceiris/actions-gh-pages
         update-types: [version-update:semver-minor, version-update:semver-patch]

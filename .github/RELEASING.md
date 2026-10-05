@@ -142,7 +142,9 @@ on Tuesday, with separate entries for `main` and `releases/1.1`. Main npm update
 group production and development minor/patch changes; the CJS `aggregate-error`
 major upgrade remains blocked until the 2.x migration removes that main-only
 ignore. Maintenance npm entries block all major upgrades. GitHub Actions entries
-track major action updates because the workflows use floating major tags.
+ignore minor/patch updates only for the explicitly listed floating major tags.
+The SHA-pinned `pwrdrvr/configure-nodejs` remains eligible for major, minor, and
+patch updates on both main and maintenance branches, with the seven-day cooldown.
 
 The `releases/1.1` entries become usable only after that branch exists. Dependabot
 may report the missing target before the owner cuts it. Repeat both ecosystem

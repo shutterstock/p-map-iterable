@@ -12,7 +12,8 @@ Read the [root guide](../AGENTS.md). Check the
 
 Run commands from the repository root. The scripts use `ts-node` and
 `tsconfig-paths`. Imports from `@shutterstock/p-map-iterable` resolve to local
-`src/` through [tsconfig.json](../tsconfig.json). The build also compiles examples.
+`src/` through [tsconfig.json](../tsconfig.json). Examples run through `ts-node`
+and are excluded from the production package build.
 
 Keep examples small and focused on one input and result contract. Keep them
 aligned with [README.md](../README.md) and source API comments. Use the same

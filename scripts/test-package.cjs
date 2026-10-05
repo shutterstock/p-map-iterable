@@ -21,9 +21,12 @@ const packageName = '@shutterstock/p-map-iterable';
 const classTypes = {
   BlockingQueue: '<number>',
   IterableMapper: '<number, number>',
+  ConcurrentMapper: '<number, number>',
   IterableQueue: '<number>',
   IterableQueueMapper: '<number, number>',
+  MappingQueue: '<number, number>',
   IterableQueueMapperSimple: '<number>',
+  WorkerQueue: '<number>',
   Queue: '<number>',
   TaskQueue: '',
   QueueFullError: '',
@@ -236,7 +239,7 @@ try {
     join(temporary, 'esm'),
   );
   console.log(
-    `PASS parity: same tarball, ${symbols.length} shared constructors, default export, conditional entrypoints, private paths`,
+    `PASS parity: same tarball, ${symbols.length} shared constructor exports, default export, conditional entrypoints, private paths`,
   );
 
   const identityApp = join(temporary, 'esm');

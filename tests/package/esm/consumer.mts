@@ -5,6 +5,9 @@ import {
   IterableMapper,
   IterableQueueMapper,
   IterableQueueMapperSimple,
+  ConcurrentMapper,
+  MappingQueue,
+  WorkerQueue,
   TaskQueue,
   QueueFullError,
   QueueClosedError,
@@ -15,6 +18,9 @@ import {
   type IterableMapperOptions,
   type IterableQueueMapperOptions,
   type IterableQueueMapperSimpleOptions,
+  type ConcurrentMapperOptions,
+  type MappingQueueOptions,
+  type WorkerQueueOptions,
   type Task,
   type TaskOutcome,
   type TaskHandle,
@@ -162,6 +168,9 @@ async function exerciseTaskQueue(): Promise<void> {
 
 async function main(): Promise<void> {
   await exerciseTaskQueue();
+  check(ConcurrentMapper === IterableMapper);
+  check(MappingQueue === IterableQueueMapper);
+  check(WorkerQueue === IterableQueueMapperSimple);
   const queue: Queue<number> = new Queue<number>();
   queue.enqueue(1);
   check(queue.dequeue() === 1 && queue.length === 0);
@@ -180,13 +189,15 @@ async function main(): Promise<void> {
 
   const mapper: Mapper<number, string> = (value, index) => `${index}:${value * 2}`;
   const options: IterableMapperOptions = { concurrency: 1, maxUnread: 1 };
-  const mapped: IterableMapper<number, string> = new IterableMapper([1, 2], mapper, options);
+  const concurrentOptions: ConcurrentMapperOptions = options;
+  const mapped: ConcurrentMapper<number, string> = new ConcurrentMapper([1, 2], mapper, concurrentOptions);
   check(JSON.stringify(await collect(mapped)) === '["0:2","1:4"]');
 
   const queuedOptions: IterableQueueMapperOptions = options;
-  const queued: IterableQueueMapper<number, string> = new IterableQueueMapper(
+  const mappingOptions: MappingQueueOptions = queuedOptions;
+  const queued: MappingQueue<number, string> = new MappingQueue(
     mapper,
-    queuedOptions,
+    mappingOptions,
   );
   const consuming = collect(queued);
   await queued.enqueue(4);
@@ -195,11 +206,12 @@ async function main(): Promise<void> {
 
   const flushed: number[] = [];
   const simpleOptions: IterableQueueMapperSimpleOptions = { concurrency: 1 };
-  const flusher: IterableQueueMapperSimple<number> = new IterableQueueMapperSimple(
+  const workerOptions: WorkerQueueOptions = simpleOptions;
+  const flusher: WorkerQueue<number> = new WorkerQueue(
     (value: number) => {
       flushed.push(value);
     },
-    simpleOptions,
+    workerOptions,
   );
   await flusher.enqueue(5);
   await flusher.onIdle();

@@ -17,7 +17,9 @@ downstream checkout. After restoration it materializes that explicit version
 with `npm version --no-git-tag-version --ignore-scripts`; it does not use
 `from-git`. Source version may be `0.0.0` or the tagged version. Registry channels
 are revalidated immediately before every publish attempt, including retries.
-Only the final public npm publish step receives `NODE_AUTH_TOKEN`.
+The publication job alone requests `id-token: write` and uses npm trusted
+publishing. No npm publication secret is supplied; the publish step clears
+`NODE_AUTH_TOKEN` to prevent setup-generated fallback authentication.
 
 Publication and manual docs share `npm-publication`, `queue: max`, and
 `cancel-in-progress: false`. Release docs require successful npm publication,
@@ -41,11 +43,13 @@ ImageVersion and populate/restore role. Completed modes do not use lookup-only.
 All five consumers keep `PNPM_CONFIG_VERIFY_DEPS_BEFORE_RUN: 'false'`; producers
 retain normal verification. Preserve pnpm age 10080 and npm age seven days.
 
-Configure/restore/build/docs/publish with `^24.0.0`; capture the selected
+Configure/restore/build/docs with `^24.0.0`; capture the selected
 `^22.0.0` binary for Jest/optional package consumers, then restore Node 24 PATH
 and tools. Prefer compatible cached versions with check-latest false; validate
-major 22, not a specific minor. Publication registry setup is caller-side
-setup-node with automatic package-manager caching disabled. See
+major 22, not a specific minor. Caller-side publication setup-node selects
+`^24.10.0` (bundled npm above the OIDC minimum 11.5.1), disables automatic
+package-manager caching, and omits `registry-url` to avoid token `.npmrc` setup.
+The publish command selects the public registry explicitly. See
 [the workflow notes](workflows/README.md) for key evidence and checks.
 
 [coverage-report/action.yml](actions/coverage-report/action.yml) parses LCOV,

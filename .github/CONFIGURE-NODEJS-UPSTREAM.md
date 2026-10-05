@@ -148,8 +148,9 @@ after `npm version` changes the source manifest. This remains a caller setting
 unless upstream explicitly guarantees it in strict mode.
 
 No `registry-url` input was added. Publication uses caller-side
-`actions/setup-node@v7` registry configuration after restoration with automatic
-package-manager caching disabled. The npm token remains final-publish-step only.
+`actions/setup-node@v7` tooling selection after restoration with automatic
+package-manager caching disabled. Publication now uses OIDC with no npm token;
+caller setup omits `registry-url` to avoid token authentication in `.npmrc`.
 
 ## Files and functions to change
 
@@ -221,7 +222,7 @@ The pinned release commit is `8876dbf3c524c8a765543dae3ae5b55d7b5ecfb3`. Prior d
 run 37238410920 and actual cache-key evidence validate the caller CI paths;
 upstream run 37236616750 covers the cross-platform strict negative fixtures.
 The old wrapper's run remains historical evidence only. Publication/docs source
-selection, ordering, token scope, and guards are validated without publishing.
+selection, ordering, authentication scope, and guards are validated without publishing.
 Current release-pin CI will validate its fresh caller namespace before readiness.
 PR #26 can stand alone because it contains the migration and workflow changes.
 No separate prerequisite branch merge is required; upstream support is released.

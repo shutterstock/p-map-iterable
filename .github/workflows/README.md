@@ -51,7 +51,8 @@ remain unchanged. All three workflows retain `npm_config_min_release_age: '7'`
 for real npm consumers/helper installs. The parent lock remains one standard v9
 document with the same 438 original package/version pairs.
 
-Build, docs, compiler, packaging and publication use `^24.0.0`. The runtime lane
+Build, docs, compiler and packaging use `^24.0.0`; publication raises its
+tooling minimum to `^24.10.0` as described below. The runtime lane
 restores/builds on Node 24, saves node/npm/pnpm paths, selects `^22.0.0`,
 captures that binary, and restores the Node 24 tooling/PATH. Jest runs through
 the captured Node 22 binary; optional consumers receive its absolute path in
@@ -69,10 +70,15 @@ exact minor-version compatibility. The completed dependency cache remains
 configured/restored under Node 24 before switching the test binary.
 
 The shared action has no `registry-url` input. Publication uses caller-side
-`actions/setup-node@v7` registry configuration after strict restoration, with
-`package-manager-cache: false`. npm remains the publication CLI and receives the
-token only in the final publish step. Optional `pnpm run --if-present
-test:package` remains in CI/publication.
+`actions/setup-node@v7` after strict restoration, with `^24.10.0`,
+`check-latest: false`, and `package-manager-cache: false`. Node 24.10.0 bundles
+npm 11.6.1, satisfying npm trusted publishing's minimum CLI 11.5.1. This setup
+omits `registry-url`, so it does not create an auth-token `.npmrc` or export a
+fallback token. The public registry is explicit in `npm publish`, which clears
+`NODE_AUTH_TOKEN` and uses OIDC. Only the publishing `build` job grants
+`id-token: write`; metadata, dependency installation and docs do not receive that
+permission. The cache inputs and Node-major cache keys remain unchanged.
+Optional `pnpm run --if-present test:package` remains in CI/publication.
 
 Release metadata is revalidated and registry channels reread immediately before
 each publication attempt, including failed-job retries. Docs use the actual

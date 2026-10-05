@@ -2,8 +2,8 @@
 
 This follows the release-train process in
 [PwrAgent's release runbook](https://github.com/pwrdrvr/PwrAgent/blob/main/docs/desktop-release-runbook.md#release-trains-and-maintenance-branches),
-adapted for this npm package's existing `release/v<version>` tags and
-`NPMJSORG_PUBLISH_TOKEN` secret.
+adapted for this npm package's existing `release/v<version>` tags and npm
+trusted publishing through GitHub Actions OIDC.
 
 ## Pending direct shared-action adoption
 
@@ -84,8 +84,8 @@ Dependabot entries when that branch is cut.
    successful npm publication. Never move an already published release tag.
 
 The release job checks out the explicit event tag with full history. Before
-installing dependencies or receiving the npm token, it verifies that HEAD is
-that tag and that the tagged commit belongs to the matching `releases/X.Y`
+installing dependencies or entering the OIDC-enabled publication job, it verifies
+that HEAD is that tag and that the tagged commit belongs to the matching `releases/X.Y`
 branch when it exists, otherwise `main`. Once a train branch exists, tagging a
 new main-only change as a patch of that old train fails. GitHub can retain
 `target_commitish: main` for existing tags, so ancestry is authoritative; an
@@ -95,8 +95,17 @@ The checked-in package version can remain `0.0.0`, as it does today, or exactly
 match the release tag. Another version fails validation. Publication replaces
 that version with the explicit tag version in the runner's manifests, without
 commits, tags, or lifecycle scripts. It does not use `npm version from-git`,
-which can select an unintended tag. The npm token is supplied through
-`NODE_AUTH_TOKEN` only to the final publish step, using the existing secret.
+which can select an unintended tag. The publishing `build` job alone has
+`contents: read` and `id-token: write`. It uses npm trusted publishing without
+an npm secret or token preflight. Caller-side setup-node selects `^24.10.0`
+(bundled npm 11.6.1, above the OIDC minimum 11.5.1), keeps `check-latest: false`
+and automatic package-manager caching disabled, and omits `registry-url` to
+avoid creating token authentication in `.npmrc`. The publish step clears any
+inherited `NODE_AUTH_TOKEN` and explicitly selects the public npm registry.
+GitHub-hosted Ubuntu runners satisfy npm's runner requirement. Public-package
+publication from this public repository automatically includes npm provenance;
+no additional `--provenance` flag is required. See
+[npm's trusted publishing requirements](https://docs.npmjs.com/trusted-publishers/).
 
 The registry's current `latest` determines the publication channel:
 
@@ -135,6 +144,29 @@ history. This change does not backfill automation into previously tagged commits
 Rerunning successful npm publication fails because npm versions are immutable. Live npm
 publication was not exercised while validating this workflow change.
 
+## Recovering releases tagged before the OIDC migration
+
+Check the exact version and dist-tags in the public registry before retrying;
+a failed job can still have published the immutable version. If it is present,
+verify its channel and repair only any remaining documentation failure.
+
+For an absent version, inspect the workflow at its tagged commit first.
+[GitHub reruns use the original SHA and ref](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/re-run-workflows-and-jobs),
+so merging this migration does not update a failed release's workflow. A tag
+containing the old token requirement cannot be recovered with OIDC by simply
+rerunning failed jobs or editing its release notes. Preserve the existing tag
+and release as an accurate record; do not restore token authentication, move
+the tag, or delete/recreate the release as a workaround.
+
+The preferred recovery is a newly authorized release with a fresh version/tag
+at the validated landed OIDC commit (for example, the next prerelease counter).
+Verify the previous version remains absent, recheck train ancestry and registry
+channel, and mark the earlier release as superseded only once recovery succeeds.
+Publishing the exact earlier version would require a separately reviewed recovery
+workflow using current trusted-publishing code while checking out and validating
+the original immutable tag, with matching npm publisher identity and serialization.
+The current workflow has no manual publish dispatch and this migration adds none.
+
 ## Dependabot and repository settings
 
 The checked-in config schedules npm updates on Monday and GitHub Actions updates
@@ -156,9 +188,12 @@ A target-branch entry does not independently enable maintenance security fixes.
 
 Required settings are managed by the repository owner:
 
-- Keep `NPMJSORG_PUBLISH_TOKEN` available to release workflows, with current npm
-  publish permission for `@shutterstock/p-map-iterable`. Secret existence alone
-  does not verify validity or package publish access.
+- Configure the npm trusted publisher for `@shutterstock/p-map-iterable` with
+  GitHub organization `shutterstock`, repository `p-map-iterable`, workflow
+  filename `publish.yml` (not a path), and permission for direct `npm publish`.
+  The job declares no GitHub environment, so the publisher must not require one.
+  These fields are case-sensitive. npm does not validate them when saved; only
+  an actual hosted publication proves access. No npm publication secret is needed.
 - Allow the referenced GitHub Actions. The workflows request read access by
   default, issue/PR write access for the coverage comment, and contents write
   access only for deploying Pages. Configure Pages to serve the existing

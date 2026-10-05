@@ -28,6 +28,10 @@ jobs:
           allow-licenses: >-
             0BSD, Apache-2.0, BSD-2-Clause, BSD-3-Clause, BlueOak-1.0.0,
             CC-BY-4.0, CC0-1.0, ISC, MIT, MPL-2.0, OFL-1.1, Python-2.0, Unlicense
+          # Audited npm artifact and inherited public-domain notices:
+          # ../ROBUST-PREDICATES-LICENSE.md. The guard below enforces the version
+          # because this pinned action matches license exceptions by name only.
+          allow-dependencies-licenses: pkg:npm/robust-predicates@3.0.3
           comment-summary-in-pr: never
           retry-on-snapshot-warnings: true
           retry-on-snapshot-warnings-timeout: 120
@@ -47,4 +51,41 @@ jobs:
             console.error(`${dependency.manifest}: ${dependency.name} has no detected license.`);
           }
           if (report.unlicensed.length > 0) process.exit(1);
+          JS
+
+      - name: Enforce the exact reviewed license exception
+        env:
+          DEPENDENCY_CHANGES: ${{ steps.review.outputs.dependency-changes }}
+        run: |
+          node <<'JS'
+          const changes = JSON.parse(process.env.DEPENDENCY_CHANGES);
+          if (!Array.isArray(changes)) throw new Error('Missing dependency review changes.');
+          const auditedLicenses = new Set([
+            'Unlicense',
+            'LicenseRef-scancode-public-domain AND Unlicense',
+          ]);
+          for (const change of changes) {
+            if (change.change_type === 'removed') continue;
+            // Match the pinned action's type/name normalization, including
+            // encoded names, so alternative PURL spellings cannot evade this guard.
+            const purl = change.package_url;
+            const type = purl.match(/pkg:([a-zA-Z0-9-_]+)\/.*/)?.[1];
+            if (!purl.startsWith('pkg:') || type?.toLowerCase() !== 'npm') continue;
+            const parts = purl.split('/');
+            const namespace = parts.length > 2 ? decodeURIComponent(parts[1]) : null;
+            const rest = parts.slice(namespace === null ? 1 : 2).join('/');
+            const name = rest.match(/([^@#?]+)[@#?]?.*/)?.[1];
+            const decodedName = name ? decodeURIComponent(name) : null;
+            const fullName = namespace && decodedName
+              ? `${namespace}/${decodedName}`
+              : decodedName ?? namespace;
+            if (fullName?.toLowerCase() !== 'robust-predicates') continue;
+            if (
+              purl !== 'pkg:npm/robust-predicates@3.0.3' ||
+              change.version !== '3.0.3' ||
+              !auditedLicenses.has(change.license)
+            ) {
+              throw new Error(`Unaudited license exception: ${purl} (${change.license}).`);
+            }
+          }
           JS

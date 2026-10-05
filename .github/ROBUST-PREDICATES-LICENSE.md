@@ -49,6 +49,12 @@ other declarations, alternative spellings, and other versions fail. Removed
 dependencies do not need an exception. Other packages retain the default
 allowlist and missing-metadata guard.
 
+The guard reads the dependency report from a runner-temporary file rather than
+an environment variable, so large lockfile changes do not hit Linux's limit
+for one environment entry. The output is JSON-encoded inside a quoted heredoc
+before the runner writes it to disk; embedded newlines, shell substitutions,
+and heredoc markers stay data. The guard decodes the file before checking it.
+
 Future robust-predicates updates require another review or removal of this
 exception; even an otherwise allowlisted declaration cannot use this bypass
 at another version. Vulnerability checking still covers all dependency scopes

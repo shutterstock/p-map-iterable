@@ -54,11 +54,17 @@ jobs:
           JS
 
       - name: Enforce the exact reviewed license exception
-        env:
-          DEPENDENCY_CHANGES: ${{ steps.review.outputs.dependency-changes }}
         run: |
+          # JSON encoding keeps report contents inside the quoted heredoc;
+          # the runner writes this script to disk instead of an environment entry.
+          cat > "$RUNNER_TEMP/dependency-review-changes.json" <<'DEPENDENCY_REVIEW_JSON'
+          ${{ toJSON(steps.review.outputs.dependency-changes) }}
+          DEPENDENCY_REVIEW_JSON
           node <<'JS'
-          const changes = JSON.parse(process.env.DEPENDENCY_CHANGES);
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const encoded = fs.readFileSync(path.join(process.env.RUNNER_TEMP, 'dependency-review-changes.json'), 'utf8');
+          const changes = JSON.parse(JSON.parse(encoded));
           if (!Array.isArray(changes)) throw new Error('Missing dependency review changes.');
           const auditedLicenses = new Set([
             'Unlicense',

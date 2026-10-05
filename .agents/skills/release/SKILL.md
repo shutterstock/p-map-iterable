@@ -135,10 +135,18 @@ pnpm run --if-present test:package
 ```
 
 Require the CI Node 22 runtime lane as part of `build`; local Node 24 checks do not
-replace it. Keep generated `dist/`, `docs/`, and coverage out of commits. Check
-readiness of the existing `NPMJSORG_PUBLISH_TOKEN` by inspecting secret names only;
-existence does not prove validity or package publish permission. Never print secret
-values or supply the publication token to a preflight command.
+replace it. Keep generated `dist/`, `docs/`, and coverage out of commits. Confirm
+the intended tagged workflow uses npm trusted publishing with `id-token: write`
+only on the publishing job, GitHub-hosted runners, and npm CLI >=11.5.1 (Node
+>=22.14.0; publication setup selects Node `^24.10.0`). No npm publication token
+or token preflight is required. Omit setup-node `registry-url` so it cannot
+create token authentication in `.npmrc`; clear inherited `NODE_AUTH_TOKEN` before
+publishing. Never read or print secret values.
+
+The npm publisher must match organization `shutterstock`, repository
+`p-map-iterable`, filename `publish.yml`, no environment, and allow direct
+`npm publish`. The owner manages these npm settings; saved configuration alone
+does not prove access. See [official npm requirements](https://docs.npmjs.com/trusted-publishers/).
 
 Set these variables to the reviewed values in the clean release checkout:
 
@@ -249,13 +257,24 @@ also skip deployment; verify that reason rather than calling it a failure.
 
 ## Recovery And Handoff
 
-Check registry state before retrying a failed publication: npm may have accepted
+Check the tagged workflow and registry state before retrying a failed publication: npm may have accepted
 the version even if the job reported failure. Never rerun a successful npm publish;
 versions are immutable. If the version is absent and a correctable failure is
-resolved, retry failed jobs once with `gh run rerun "$RELEASE_RUN_ID" --failed`, then
+resolved in that immutable workflow or its external settings, retry failed jobs
+once with `gh run rerun "$RELEASE_RUN_ID" --failed`, then
 verify the new result. Stop on a repeated failure with the precise blocker and next
 action.
 Do not delete releases, rewrite tags, or unpublish packages as recovery shortcuts.
+
+Merging authentication changes on main does not repair earlier tagged workflows:
+reruns retain the original SHA/ref. If the absent version's workflow still requires
+a token, do not retry it expecting OIDC or restore a publication token. Prefer a
+newly authorized version/tag at the validated landed OIDC commit. Publishing the
+exact earlier version instead requires a separately reviewed recovery workflow
+that validates and builds the original immutable tag with current OIDC code,
+matching npm publisher settings and the existing publication lock. Follow the
+runbook's recovery guidance; this skill does not authorize that extra workflow
+or a new version without the user's release request.
 
 If npm succeeded and only docs failed, rerun only the failed docs job. An authorized
 manual `docs.yml` dispatch from `main` is another option when the current registry

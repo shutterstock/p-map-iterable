@@ -65,7 +65,7 @@ function verifyDocsDeployment({ eventName, ref, event, latest, cwd = process.cwd
 }
 
 function main() {
-  // Public registry metadata is intentionally read without the publication token.
+  // Public registry metadata does not require authentication.
   const distTags = JSON.parse(run('npm', [
     'view', packageName, 'dist-tags', '--json', '--registry=https://registry.npmjs.org/',
   ], process.cwd()));

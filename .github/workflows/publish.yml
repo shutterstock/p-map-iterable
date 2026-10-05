@@ -26,7 +26,7 @@ jobs:
       commit: ${{ steps.release.outputs.commit }}
     steps:
       - name: Checkout the published release tag
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ github.event.release.tag_name }}
           fetch-depth: 0
@@ -42,7 +42,7 @@ jobs:
     outputs:
       cache-key: ${{ steps.configure-nodejs.outputs.cache-key }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ needs.select-release.outputs.commit }}
           persist-credentials: false
@@ -67,7 +67,7 @@ jobs:
       npm-tag: ${{ steps.publication.outputs.npm-tag }}
     steps:
       - name: Checkout the published release tag
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ needs.select-release.outputs.commit }}
           fetch-depth: 0
@@ -94,7 +94,7 @@ jobs:
           printf 'Completed dependency cache key: %s\n' "$CONSUMER_CACHE_KEY"
 
       - name: Configure npm publication registry
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: '^24.0.0'
           check-latest: false
@@ -146,7 +146,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ needs.select-release.outputs.commit }}
           fetch-depth: 0
@@ -181,7 +181,7 @@ jobs:
 
       - name: Deploy to GitHub Pages
         if: steps.deployment.outputs.publish == 'true'
-        uses: peaceiris/actions-gh-pages@v4
+        uses: peaceiris/actions-gh-pages@84c30a85c19949d7eee79c4ff27748b70285e453 # v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./docs

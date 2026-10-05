@@ -30,6 +30,9 @@ updates:
         dependency-type: development
         patterns: ['*']
         update-types: [minor, patch]
+      security-updates:
+        applies-to: security-updates
+        patterns: ['*']
 
   # This target becomes available after the owner cuts releases/1.1 from the
   # refreshed 1.1.x main. Add equivalent entries when another train is cut.
@@ -63,7 +66,11 @@ updates:
         update-types: [minor, patch]
 
   - package-ecosystem: github-actions
-    directory: /
+    # The root scan does not follow local composite-action references.
+    directories:
+      - /
+      - /.github/actions/coverage-report
+      - /.github/actions/release-metadata
     schedule:
       interval: weekly
       day: tuesday
@@ -76,21 +83,11 @@ updates:
       include: scope
     cooldown:
       default-days: 7
-    # Only floating major tags already receive minor and patch releases.
-    # Keep SHA-pinned configure-nodejs eligible for all release updates.
-    ignore:
-      - dependency-name: actions/checkout
-        update-types: [version-update:semver-minor, version-update:semver-patch]
-      - dependency-name: actions/setup-node
-        update-types: [version-update:semver-minor, version-update:semver-patch]
-      - dependency-name: actions/upload-artifact
-        update-types: [version-update:semver-minor, version-update:semver-patch]
-      - dependency-name: peter-evans/find-comment
-        update-types: [version-update:semver-minor, version-update:semver-patch]
-      - dependency-name: peter-evans/create-or-update-comment
-        update-types: [version-update:semver-minor, version-update:semver-patch]
-      - dependency-name: peaceiris/actions-gh-pages
-        update-types: [version-update:semver-minor, version-update:semver-patch]
+    # Commit pins require explicit minor and patch updates as well as majors.
+    groups:
+      actions-minor-patch:
+        patterns: ['*']
+        update-types: [minor, patch]
 
   - package-ecosystem: github-actions
     directory: /

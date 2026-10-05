@@ -55,13 +55,18 @@ Preserve its installation policy and the single-document v9 lockfile.
 | `pnpm run build:docs` | Generate API docs from `src/index.ts` in `docs/`. |
 | `pnpm run lint` | Check source style and promise handling. |
 | `pnpm run test` | Run the Jest suite and collect coverage. |
+| `pnpm run test:package` | Install one real npm pack tarball in independent CJS/ESM consumers; check types, runtime, contents, and identity. |
 
 For code changes, run the relevant tests first. Then run the build, docs build,
 lint, and full test suite before handoff. For documentation-only changes, check
 the facts, links, and diff. No new tests are needed solely for documentation.
 
 The compiler uses strict TypeScript, Node16 modules, and an ES2018 target.
-The package entry points are `dist/src/index.js` and `dist/src/index.d.ts`.
+The 2.x package uses canonical CommonJS `dist/index.js` with `dist/index.d.ts`,
+and native ESM facade `dist/index.mjs` with `dist/index.d.mts`.
+Conditional exports select the matching runtime and declarations. The library
+supports Node.js >=22; `PACKAGE_TEST_NODE` selects a consumer runtime while
+packing and compilation stay on the Node.js 24 toolchain.
 Read [package.json](package.json), [tsconfig.json](tsconfig.json), and
 [eslint.config.cjs](eslint.config.cjs) before changing build or package behavior.
 Use two spaces, single quotes, semicolons, and trailing commas in TypeScript.

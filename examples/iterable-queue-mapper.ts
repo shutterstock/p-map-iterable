@@ -1,7 +1,5 @@
 /* eslint-disable no-console */
 import { IterableQueueMapper } from '@shutterstock/p-map-iterable';
-
-import AggregateError from 'aggregate-error';
 import { promisify } from 'util';
 const sleep = promisify(setTimeout);
 

@@ -17,6 +17,7 @@ subclass behavior intact. Check [index.test.ts](index.test.ts) for alias coverag
 | `IterableQueue` | [iterable-queue.ts](iterable-queue.ts) | Add async iteration to `BlockingQueue`. | Does not map items. |
 | `BlockingQueue` | [blocking-queue.ts](blocking-queue.ts) | Coordinate async writers and readers in FIFO order. | Does not run callbacks. |
 | `Queue` | [queue.ts](queue.ts) | Store items in FIFO order with constant-time removal. | Has no waits, capacity limit, or shutdown method. |
+| `TaskQueue` | [task-queue.ts](task-queue.ts) | Admit bounded lazy tasks with per-task outcomes and cooperative cancellation. | Reusable idle waits; `close()` ends admission. |
 
 Put shared mapping logic in `IterableMapper`. `IterableQueueMapper` combines it
 with an input `IterableQueue`. `IterableQueueMapperSimple` wraps that mapping
@@ -24,8 +25,9 @@ queue and consumes its results. Keep these layers distinct. Use an existing
 layer before adding a second implementation of the same contract.
 
 Callbacks overlap async work in one JavaScript process. They do not start worker
-threads. Event admission limits, cancellation, deduplication, and per-item
-completion handles are caller concerns under the current API.
+threads. The iterable APIs leave event admission and per-item handles to callers.
+The 2.x `TaskQueue` provides bounded admission, cancellation, and per-task handles;
+deduplication remains a caller concern. See [DESIGN-2.md](../DESIGN-2.md).
 
 ## Defaults and backpressure
 
@@ -34,6 +36,7 @@ completion handles are caller concerns under the current API.
 | `IterableMapper`, `IterableQueueMapper` | `concurrency: 4`, `maxUnread: 8`, `stopOnMapperError: true`. |
 | `IterableQueueMapperSimple` | `concurrency: 4`. Internal `maxUnread` equals `concurrency`. |
 | `BlockingQueue`, `IterableQueue` | `maxUnread: 8`. |
+| `TaskQueue` | `concurrency: 4`, `maxPending: 8`. |
 
 - Mapper limits accept positive safe integers or `Infinity`.
   `maxUnread` must be at least `concurrency`.
@@ -61,7 +64,8 @@ completion handles are caller concerns under the current API.
 - With `stopOnMapperError: true`, mapper failure stops new work and reaches the
   result iterator. It does not cancel callbacks that already started.
 - With `stopOnMapperError: false`, mapping continues. The result iterator throws
-  `AggregateError` at the end. Source iterator errors stop work in either mode.
+  native `AggregateError` at the end, with original rejection values in `.errors`
+  and no coercion. Source iterator errors stop work in either mode.
 
 ## Tests
 

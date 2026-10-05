@@ -8,6 +8,16 @@ import {
 } from './iterable-queue-mapper-simple';
 import { Queue } from './queue';
 
+export { TaskQueue, QueueFullError, QueueClosedError, TaskCancelledError } from './task-queue';
+export type {
+  Task,
+  TaskOutcome,
+  TaskHandle,
+  TaskQueueOptions,
+  TaskOptions,
+  TaskQueueCloseOptions,
+} from './task-queue';
+
 export {
   IterableMapper,
   IterableMapper as ConcurrentMapper,

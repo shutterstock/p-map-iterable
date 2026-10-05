@@ -19,9 +19,10 @@ subclass behavior intact. Check [index.test.ts](index.test.ts) for alias coverag
 | `Queue` | [queue.ts](queue.ts) | Store items in FIFO order with constant-time removal. | Has no waits, capacity limit, or shutdown method. |
 
 Put shared mapping logic in `IterableMapper`. `IterableQueueMapper` combines it
-with an input `IterableQueue`. `IterableQueueMapperSimple` wraps that mapping
-queue and consumes its results. Keep these layers distinct. Use an existing
-layer before adding a second implementation of the same contract.
+with an input `IterableQueue`. `IterableQueueMapperSimple` schedules inputs
+directly with independent concurrency and unfinished-input limits, discarding
+worker results. Keep these contracts distinct. Use an existing layer before
+adding a second implementation of the same contract.
 
 Callbacks overlap async work in one JavaScript process. They do not start worker
 threads. Event admission limits, cancellation, deduplication, and per-item
@@ -32,7 +33,7 @@ completion handles are caller concerns under the current API.
 | Class | Defaults |
 | --- | --- |
 | `IterableMapper`, `IterableQueueMapper` | `concurrency: 4`, `maxUnread: 8`, `stopOnMapperError: true`. |
-| `IterableQueueMapperSimple` | `concurrency: 4`. Internal `maxUnread` equals `concurrency`. |
+| `IterableQueueMapperSimple` | `concurrency: 4`, `maxQueueDepth: concurrency`. Extra buffering is opt-in. |
 | `BlockingQueue`, `IterableQueue` | `maxUnread: 8`. |
 
 - Mapper limits accept positive safe integers or `Infinity`.
@@ -41,6 +42,9 @@ completion handles are caller concerns under the current API.
   `IterableQueueMapper` uses this setting for its input queue.
 - Mapper runners and unread results share the backpressure budget.
   Do not treat `maxUnread` as an independent input backlog limit.
+- `WorkerQueue.maxQueueDepth` counts admitted unfinished inputs, including running
+  callbacks. It must be at least `concurrency`. Await each enqueue to avoid
+  accumulating blocked calls and their inputs outside that limit.
 - `BlockingQueue.enqueue()` stores the item before it waits for a read.
   Await each enqueue to slow the producer. Unawaited calls can grow the backlog.
 - Queue storage is FIFO. Mapped results can arrive out of input order when

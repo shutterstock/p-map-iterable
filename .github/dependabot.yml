@@ -1,7 +1,6 @@
 version: 2
 
 updates:
-  # The npm ecosystem also supports pnpm if the package manager changes.
   - package-ecosystem: npm
     directory: /
     schedule:
@@ -15,17 +14,19 @@ updates:
     commit-message:
       prefix: chore
       include: scope
-    # Match PwrGit/PwrAgent's seven-day supply-chain window. Security updates
-    # bypass cooldown; major version updates get more time and individual PRs.
     cooldown:
       default-days: 7
       semver-major-days: 14
+    # Keep the CJS production dependency until the planned 2.x ESM migration.
+    ignore:
+      - dependency-name: aggregate-error
+        update-types: [version-update:semver-major]
     groups:
-      production-minor-patch:
+      npm-production-minor-patch:
         dependency-type: production
         patterns: ['*']
         update-types: [minor, patch]
-      development-minor-patch:
+      npm-development-minor-patch:
         dependency-type: development
         patterns: ['*']
         update-types: [minor, patch]
@@ -33,12 +34,43 @@ updates:
         applies-to: security-updates
         patterns: ['*']
 
+  # This target becomes available after the owner cuts releases/1.1 from the
+  # refreshed 1.1.x main. Add equivalent entries when another train is cut.
+  - package-ecosystem: npm
+    directory: /
+    target-branch: releases/1.1
+    schedule:
+      interval: weekly
+      day: monday
+      time: '09:00'
+      timezone: America/New_York
+    open-pull-requests-limit: 5
+    labels: []
+    versioning-strategy: increase-if-necessary
+    commit-message:
+      prefix: chore
+      include: scope
+    cooldown:
+      default-days: 7
+    ignore:
+      - dependency-name: '*'
+        update-types: [version-update:semver-major]
+    groups:
+      npm-production-minor-patch:
+        dependency-type: production
+        patterns: ['*']
+        update-types: [minor, patch]
+      npm-development-minor-patch:
+        dependency-type: development
+        patterns: ['*']
+        update-types: [minor, patch]
+
   - package-ecosystem: github-actions
     # The root scan does not follow local composite-action references.
     directories:
       - /
-      - /.github/actions/configure-nodejs
       - /.github/actions/coverage-report
+      - /.github/actions/release-metadata
     schedule:
       interval: weekly
       day: tuesday
@@ -51,8 +83,38 @@ updates:
       include: scope
     cooldown:
       default-days: 7
-    # Actions are pinned to commits, so minor/patch updates also need PRs.
+    # Commit pins require explicit minor and patch updates as well as majors.
     groups:
       actions-minor-patch:
         patterns: ['*']
         update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: releases/1.1
+    schedule:
+      interval: weekly
+      day: tuesday
+      time: '09:00'
+      timezone: America/New_York
+    open-pull-requests-limit: 3
+    labels: []
+    commit-message:
+      prefix: chore
+      include: scope
+    cooldown:
+      default-days: 7
+    # Match main: ignore minor/patch changes only for floating major tags.
+    ignore:
+      - dependency-name: actions/checkout
+        update-types: [version-update:semver-minor, version-update:semver-patch]
+      - dependency-name: actions/setup-node
+        update-types: [version-update:semver-minor, version-update:semver-patch]
+      - dependency-name: actions/upload-artifact
+        update-types: [version-update:semver-minor, version-update:semver-patch]
+      - dependency-name: peter-evans/find-comment
+        update-types: [version-update:semver-minor, version-update:semver-patch]
+      - dependency-name: peter-evans/create-or-update-comment
+        update-types: [version-update:semver-minor, version-update:semver-patch]
+      - dependency-name: peaceiris/actions-gh-pages
+        update-types: [version-update:semver-minor, version-update:semver-patch]

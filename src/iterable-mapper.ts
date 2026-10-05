@@ -6,7 +6,7 @@ import AggregateError from 'aggregate-error';
 import { IterableQueue } from './iterable-queue';
 
 /**
- * Options for IterableMapper
+ * Options for `IterableMapper`, also exported as `ConcurrentMapperOptions`.
  */
 export interface IterableMapperOptions {
   /**
@@ -66,7 +66,7 @@ export interface IterableMapperOptions {
  * @template Element - Source element type
  * @template NewElement - Element type returned by the mapper
  * @param element - Iterated element
- * @param index - Index of the element in the source array
+ * @param index - Zero-based index of the input element
  */
 export type Mapper<Element = unknown, NewElement = unknown> = (
   element: Element,
@@ -87,9 +87,14 @@ type NewElementOrError<NewElement = unknown> = {
  * `mapper` result in a queue of `maxUnread` size, before
  * being iterated / read by the caller.
  *
+ * Also exported as `ConcurrentMapper`, with the same constructor and instance types.
+ * Concurrency overlaps asynchronous callback work in the current JavaScript process.
+ * Results can arrive out of input order when `concurrency` is greater than one.
+ *
  * @remarks
  *
- * ### Typical Use Case
+ * ### Typical Use Cases
+ * - Enriching metadata or probing capabilities for a sync or async iterable of inputs
  * - Prefetching items from an async I/O source
  * - In the simple sequential (`concurrency: 1`) case, allows items to be prefetched async, preserving order, while caller processes an item
  * - Can allow parallel prefetches for sources that allow for out of order reads (`concurrency:  2+`)
@@ -110,7 +115,8 @@ type NewElementOrError<NewElement = unknown> = {
  *
  * ### Usage
  * - Items are exposed to the `mapper` via an iterator or async iterator (this includes generator and async generator functions)
- * - IMPORTANT: `mapper` method not be invoked when `maxUnread` is reached, until items are consumed
+ * - Consume results with `for await` while mapping proceeds
+ * - The `mapper` will not be invoked when `maxUnread` is reached, until items are consumed
  * - The iterable will set `done` when the `input` has indicated `done` and all `mapper` promises have resolved
  *
  * @example
@@ -134,14 +140,14 @@ type NewElementOrError<NewElement = unknown> = {
  *
  * @example
  *
- * ### Using `IterableMapper` as Prefetcher with Blocking Sequential Writes
+ * ### Prefetching with `IterableMapper` and Blocking Sequential Writes
  *
- * `concurrency: 1` on the prefetcher preserves the order of the reads and and writes are sequential and blocking (unchanged).
+ * `concurrency: 1` on the prefetcher preserves the order of the reads, and writes remain sequential and blocking.
  *
  * ```typescript
  * const source = new SomeSource();
  * const sourceIds = [1, 2,... 1000];
- * // Pre-reads up to 8 items serially and releases in sequential order
+ * // Prefetches serially within maxUnread and releases results in sequential order
  * const sourcePrefetcher = new IterableMapper(sourceIds,
  *   async (sourceId) => source.read(sourceId),
  *   { concurrency: 1, maxUnread: 10 }
@@ -157,7 +163,7 @@ type NewElementOrError<NewElement = unknown> = {
  *
  * @example
  *
- * ### Using `IterableMapper` as Prefetcher with Background Sequential Writes with `IterableQueueMapperSimple`
+ * ### Prefetching with `IterableMapper` and Background Sequential Writes with `IterableQueueMapperSimple`
  *
  * `concurrency: 1` on the prefetcher preserves the order of the reads.
  * `concurrency: 1` on the flusher preserves the order of the writes, but allows the loop to iterate while last write is completing.
@@ -178,7 +184,7 @@ type NewElementOrError<NewElement = unknown> = {
  *   const outputItem = doSomeOperation(item);     // takes 20 ms of CPU
  *   await flusher.enqueue(outputItem);            // will periodically block for portion of write time
  * }
- * // Wait for all writes to complete
+ * // Close input permanently after the last enqueue and wait for all writes
  * await flusher.onIdle();
  * // Check for errors
  * if (flusher.errors.length > 0) {
@@ -193,7 +199,7 @@ type NewElementOrError<NewElement = unknown> = {
  *
  * @example
  *
- * ### Using `IterableMapper` as Prefetcher with Out of Order Reads and Background Out of Order Writes with `IterableQueueMapperSimple`
+ * ### Prefetching with `IterableMapper` and Out of Order Background Writes with `IterableQueueMapperSimple`
  *
  * For maximum throughput, allow out of order reads and writes with
  * `IterableQueueMapper` (to iterate results with backpressure when too many unread items) or
@@ -215,7 +221,7 @@ type NewElementOrError<NewElement = unknown> = {
  *   const outputItem = doSomeOperation(item);     // takes 20 ms of CPU
  *   await flusher.enqueue(outputItem);            // typically will not block
  * }
- * // Wait for all writes to complete
+ * // Close input permanently after the last enqueue and wait for all writes
  * await flusher.onIdle();
  * // Check for errors
  * if (flusher.errors.length > 0) {
@@ -252,7 +258,7 @@ export class IterableMapper<Element, NewElement> implements AsyncIterable<NewEle
    * @param mapper Function called for every item in `input`. Returns a `Promise` or value.
    * @param options IterableMapper options
    *
-   * @see {@link IterableQueueMapper} for full class documentation
+   * @see {@link IterableMapper} for full class documentation
    */
   constructor(
     input: AsyncIterable<Element> | Iterable<Element>,

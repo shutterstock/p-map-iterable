@@ -23,8 +23,8 @@ settings under **Settings > Security**:
 After the workflow changes merge, set **Settings > Actions > General > Workflow
 permissions** to **Read repository contents and packages permissions**. Keep
 **Allow GitHub Actions to create and approve pull requests** disabled. Each
-workflow declares its permissions: coverage comments need `pull-requests:
-write`, documentation deployment needs `contents: write`, and CodeQL needs
+workflow declares its permissions: coverage comments need `issues: write` and
+`pull-requests: write`, documentation deployment needs `contents: write`, and CodeQL needs
 `security-events: write`.
 
 The existing branch protection requires `build`. After the new workflows have

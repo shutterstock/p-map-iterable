@@ -7,49 +7,181 @@ on:
 permissions:
   contents: read
 
+env:
+  npm_config_min_release_age: '7'
+
+# Serialize registry checks and publication so competing trains cannot move
+# latest backwards between the metadata check and npm publish.
+concurrency:
+  group: npm-publication
+  queue: max
+  cancel-in-progress: false
+
 jobs:
-  install-deps:
+  select-release:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      npm-tag: ${{ steps.release.outputs.npm-tag }}
+      commit: ${{ steps.release.outputs.commit }}
+    steps:
+      - name: Checkout the published release tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.release.tag_name }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check release metadata and select npm channel
+        id: release
+        uses: ./.github/actions/release-metadata
+
+  install-deps:
+    needs: select-release
+    runs-on: ubuntu-latest
+    outputs:
+      cache-key: ${{ steps.configure-nodejs.outputs.cache-key }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          ref: ${{ needs.select-release.outputs.commit }}
           persist-credentials: false
-      - uses: ./.github/actions/configure-nodejs
+
+      - name: Populate completed dependencies
+        id: configure-nodejs
+        uses: pwrdrvr/configure-nodejs@8876dbf3c524c8a765543dae3ae5b55d7b5ecfb3 # v1.6.0
         with:
-          lookup-only: 'true' # We only want to lookup from the cache - if a hit, this job does nothing
+          node-version: '^24.0.0'
+          package-manager: pnpm
+          working-directory: '.'
+          dependency-cache: node-modules
+          cache-mode: populate
+          cache-key-suffix: p-map-iterable-8876dbf3c524c8a765543dae3ae5b55d7b5ecfb3-${{ hashFiles('package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', '.npmrc') }}
 
   build:
-    needs:
-      - install-deps
+    needs: [select-release, install-deps]
     runs-on: ubuntu-latest
+    env:
+      PNPM_CONFIG_VERIFY_DEPS_BEFORE_RUN: 'false'
+    outputs:
+      npm-tag: ${{ steps.publication.outputs.npm-tag }}
     steps:
-      - name: Checkout code
+      - name: Checkout the published release tag
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          ref: ${{ needs.select-release.outputs.commit }}
+          fetch-depth: 0
           persist-credentials: false
 
-      - uses: ./.github/actions/configure-nodejs
+      - name: Restore completed dependencies
+        id: configure-nodejs
+        uses: pwrdrvr/configure-nodejs@8876dbf3c524c8a765543dae3ae5b55d7b5ecfb3 # v1.6.0
+        with:
+          node-version: '^24.0.0'
+          package-manager: pnpm
+          working-directory: '.'
+          dependency-cache: node-modules
+          cache-mode: restore
+          cache-key-suffix: p-map-iterable-8876dbf3c524c8a765543dae3ae5b55d7b5ecfb3-${{ hashFiles('package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', '.npmrc') }}
 
-      - name: Use the Release Tag Version
+      - name: Require completed cache key to match the producer
+        env:
+          PRODUCER_CACHE_KEY: ${{ needs.install-deps.outputs.cache-key }}
+          CONSUMER_CACHE_KEY: ${{ steps.configure-nodejs.outputs.cache-key }}
         run: |
-          npm version from-git --allow-same-version --no-git-tag-version
+          test -n "$PRODUCER_CACHE_KEY"
+          test "$CONSUMER_CACHE_KEY" = "$PRODUCER_CACHE_KEY"
+          printf 'Completed dependency cache key: %s\n' "$CONSUMER_CACHE_KEY"
+
+      - name: Configure npm publication registry
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '^24.0.0'
+          check-latest: false
+          registry-url: https://registry.npmjs.org/
+          package-manager-cache: false
+
+      - name: Test release metadata
+        run: node --test .github/scripts/release-metadata.test.cjs .github/scripts/docs-deployment.test.cjs
+
+      - name: Use the explicit release tag version
+        env:
+          RELEASE_VERSION: ${{ needs.select-release.outputs.version }}
+        run: npm version "$RELEASE_VERSION" --allow-same-version --no-git-tag-version --ignore-scripts
 
       - name: Build
-        run: npm run build
+        run: pnpm run build
 
       - name: Lint
-        run: npm run lint
+        run: pnpm run lint
 
       - name: Test
-        run: npm run test
+        run: pnpm run test
 
-      - name: NPM registry authentication
+      - name: Test package consumers when available
+        run: pnpm run --if-present test:package
+
+      # Successful upstream jobs are reused by "Re-run failed jobs". Revalidate
+      # this pinned checkout and reread latest on every publication attempt.
+      - name: Revalidate release and refresh the publication channel
+        id: publication
+        uses: ./.github/actions/release-metadata
+
+      - name: Publish with CLI to npm
         env:
-          NPM_PUBLISH_TOKEN: ${{ secrets.NPMJSORG_PUBLISH_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPMJSORG_PUBLISH_TOKEN }}
+          NPM_DIST_TAG: ${{ steps.publication.outputs.npm-tag }}
         run: |
-          npm set //registry.npmjs.org/:_authToken "$NPM_PUBLISH_TOKEN"
-          npm config set @shutterstock:registry https://registry.npmjs.org/
+          test -n "$NODE_AUTH_TOKEN"
+          npm publish --access public --ignore-scripts --tag "$NPM_DIST_TAG" --registry=https://registry.npmjs.org/
 
-      - name: Publish with CLI to NPM
+  docs:
+    # An unpublished or failed release cannot change Pages. Maintenance and
+    # prerelease channels never deploy the current stable documentation.
+    needs: [select-release, install-deps, build]
+    if: needs.build.outputs.npm-tag == 'latest'
+    runs-on: ubuntu-latest
+    env:
+      PNPM_CONFIG_VERIFY_DEPS_BEFORE_RUN: 'false'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.select-release.outputs.commit }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Restore completed dependencies
+        id: configure-nodejs
+        uses: pwrdrvr/configure-nodejs@8876dbf3c524c8a765543dae3ae5b55d7b5ecfb3 # v1.6.0
+        with:
+          node-version: '^24.0.0'
+          package-manager: pnpm
+          working-directory: '.'
+          dependency-cache: node-modules
+          cache-mode: restore
+          cache-key-suffix: p-map-iterable-8876dbf3c524c8a765543dae3ae5b55d7b5ecfb3-${{ hashFiles('package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', '.npmrc') }}
+
+      - name: Require completed cache key to match the producer
+        env:
+          PRODUCER_CACHE_KEY: ${{ needs.install-deps.outputs.cache-key }}
+          CONSUMER_CACHE_KEY: ${{ steps.configure-nodejs.outputs.cache-key }}
         run: |
-          npm publish --access public --ignore-scripts
+          test -n "$PRODUCER_CACHE_KEY"
+          test "$CONSUMER_CACHE_KEY" = "$PRODUCER_CACHE_KEY"
+          printf 'Completed dependency cache key: %s\n' "$CONSUMER_CACHE_KEY"
+
+      - name: Build Docs
+        run: pnpm run build:docs
+
+      - name: Recheck published npm latest and explicit tag provenance before deployment
+        id: deployment
+        run: node .github/scripts/docs-deployment.cjs
+
+      - name: Deploy to GitHub Pages
+        if: steps.deployment.outputs.publish == 'true'
+        uses: peaceiris/actions-gh-pages@84c30a85c19949d7eee79c4ff27748b70285e453 # v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./docs

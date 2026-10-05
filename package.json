@@ -1,7 +1,8 @@
 {
   "name": "@shutterstock/p-map-iterable",
   "version": "0.0.0",
-  "description": "Set of classes used for async prefetching with backpressure (IterableMapper) and async flushing with backpressure (IterableQueueMapper, IterableQueueMapperSimple)",
+  "packageManager": "pnpm@12.7.0",
+  "description": "Concurrent mapping and queued background work with backpressure, streaming results, and collected errors",
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
   "publishConfig": {
@@ -29,6 +30,7 @@
     "example:iterable-mapper": "ts-node -r tsconfig-paths/register examples/iterable-mapper.ts",
     "example:iterable-queue-mapper": "ts-node -r tsconfig-paths/register examples/iterable-queue-mapper.ts",
     "example:iterable-queue-mapper-simple": "ts-node -r tsconfig-paths/register examples/iterable-queue-mapper-simple.ts",
+    "example:semantic-aliases": "ts-node -r tsconfig-paths/register examples/semantic-aliases.ts",
     "test": "jest",
     "lint": "eslint .",
     "lint-and-fix": "eslint . --fix"

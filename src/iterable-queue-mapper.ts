@@ -5,7 +5,7 @@ import { IterableMapper, IterableMapperOptions, Mapper } from './iterable-mapper
 import { IterableQueue } from './iterable-queue';
 
 /**
- * Options for IterableQueueMapper
+ * Options for `IterableQueueMapper`, also exported as `MappingQueueOptions`.
  */
 export type IterableQueueMapperOptions = IterableMapperOptions;
 
@@ -15,12 +15,16 @@ export type IterableQueueMapperOptions = IterableMapperOptions;
  * of `maxUnread` size, before being iterated / read by the caller.
  * The `enqueue` method will block if the queue is full, until an item is read.
  *
+ * Also exported as `MappingQueue`, with the same constructor and instance types.
+ * Each input uses the same callback supplied at construction; results are exposed
+ * through the async iterator as mapping completes.
+ *
  * @remarks
  *
- * ### Typical Use Case
- * - Pushing items to an async I/O destination
- * - In the simple sequential (`concurrency: 1`) case, allows 1 item to be flushed async while caller prepares next item
- * - Results of the flushed items are needed in a subsequent step (if they are not, use `IterableQueueMapperSimple`)
+ * ### Typical Use Cases
+ * - Enqueuing capability probes or metadata lookups as inputs become available
+ * - Sending items to an async I/O destination and consuming its acknowledgements
+ * - Consuming mapped results in a subsequent step (if results can be discarded, use `IterableQueueMapperSimple` / `WorkerQueue`)
  * - Prevents the producer from racing ahead of the consumer if `maxUnread` is reached
  *
  * ### Error Handling
@@ -39,8 +43,10 @@ export type IterableQueueMapperOptions = IterableMapperOptions;
  * ### Usage
  * - Items are added to the queue via the `await enqueue()` method
  * - IMPORTANT: `await enqueue()` method will block until a slot is available, if queue is full
- * - Call `done()` when no more items will be enqueued
- * - IMPORTANT: Always `await onIdle()` to ensure all items are processed
+ * - Produce inputs and consume results concurrently so the result buffer can drain
+ * - Call `done()` after the last awaited enqueue, then finish consuming the iterator
+ * - `enqueue()` confirms acceptance of an input; `done()` closes input without waiting for work to finish
+ * - Await each enqueue for producer backpressure; unawaited calls can accumulate pending inputs
  *
  * @category Enqueue Input
  *
@@ -82,7 +88,9 @@ export class IterableQueueMapper<Element, NewElement> implements AsyncIterable<N
   }
 
   /**
-   * Add an item to the queue, wait if the queue is full.
+   * Add an item to the queue, waiting until it can be accepted.
+   * Resolves on acceptance, rather than completion of the mapper for this item.
+   * Await each enqueue while consuming results concurrently for producer backpressure.
    *
    * @param item Element to add
    */
@@ -93,7 +101,8 @@ export class IterableQueueMapper<Element, NewElement> implements AsyncIterable<N
   /**
    * Indicate that no more items will be enqueued.
    *
-   * This releases all readers blocked on `enqueue`
+   * Call after the last awaited enqueue. Finish consuming the async iterator
+   * to wait for mapped results; this method does not wait for processing to finish.
    */
   public done(): void {
     this._sourceIterable.done();

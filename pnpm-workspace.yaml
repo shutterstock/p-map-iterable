@@ -1,3 +1,7 @@
+packages:
+  # Packed consumers and validation helpers install independently of the library.
+  - '.'
+
 # Require third-party releases to be at least seven days old.
 minimumReleaseAge: 10080
 

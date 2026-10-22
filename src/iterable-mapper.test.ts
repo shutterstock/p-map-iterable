@@ -5,6 +5,80 @@ async function sleep<T = void>(ms: number, value?: T): Promise<T> {
   return new Promise<T>((resolve) => setTimeout(() => resolve(value as T), ms));
 }
 
+describe('native AggregateError', () => {
+  it.each([false, true])(
+    'retains Error and primitive rejections (success: %s)',
+    async (success) => {
+      const failure = new Error('mapper failure');
+      const rejections = [failure, 'primitive failure', 0, null, undefined];
+      const input = success ? [...rejections, 42] : rejections;
+      const results: number[] = [];
+      const prefetcher = new IterableMapper(
+        input,
+        async (value): Promise<number> => {
+          if (value === 42) return value;
+          return Promise.reject(value);
+        },
+        { concurrency: 1, maxUnread: 1, stopOnMapperError: false },
+      );
+
+      let caught: unknown;
+      try {
+        for await (const value of prefetcher) results.push(value);
+      } catch (error) {
+        caught = error;
+      }
+      expect(caught).toBeInstanceOf(AggregateError);
+      const aggregate = caught as AggregateError;
+      expect(aggregate.errors).toEqual(rejections);
+      expect(aggregate.errors[0]).toBe(failure);
+      expect(aggregate.message).toBe('One or more mapper operations failed');
+      expect(Symbol.iterator in aggregate).toBe(false);
+      expect(results).toEqual(success ? [42] : []);
+    },
+  );
+
+  it('does not coerce hostile rejection objects and retains every original value', async () => {
+    const toString = jest.fn(() => {
+      throw new Error('hostile toString');
+    });
+    const toPrimitive = jest.fn(() => {
+      throw new Error('hostile Symbol.toPrimitive');
+    });
+    const stringObject = { toString };
+    const primitiveObject = { [Symbol.toPrimitive]: toPrimitive };
+    const failure = new Error('original error');
+    const rejections = [
+      stringObject,
+      primitiveObject,
+      failure,
+      'original string',
+      0,
+      null,
+      undefined,
+    ];
+    const prefetcher = new IterableMapper(
+      rejections,
+      async (value): Promise<never> => Promise.reject(value),
+      { concurrency: 1, maxUnread: 1, stopOnMapperError: false },
+    );
+    let caught: unknown;
+    try {
+      for await (const value of prefetcher) void value;
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(AggregateError);
+    const aggregate = caught as AggregateError;
+    expect(aggregate.message).toBe('One or more mapper operations failed');
+    expect(aggregate.errors).toHaveLength(rejections.length);
+    rejections.forEach((value, index) => expect(aggregate.errors[index]).toBe(value));
+    expect(toString).not.toHaveBeenCalled();
+    expect(toPrimitive).not.toHaveBeenCalled();
+  });
+});
+
 async function mapper({ value, ms }: { value: number; ms: number }): Promise<number> {
   await sleep(ms);
   return value;
@@ -606,7 +680,12 @@ describe('IterableMapper', () => {
           loopCount++;
           iteratedValues.push(value);
         }
-      }).rejects.toThrow('throw on 1st');
+      }).rejects.toMatchObject({
+        name: 'AggregateError',
+        errors: Array.from({ length: 1 }, () =>
+          expect.objectContaining({ message: 'throw on 1st' }),
+        ),
+      });
       await sleep(300);
       expect(loopCount).toBe(2);
       expect(mappedValues).toEqual([1, 2, 3]);
@@ -637,7 +716,12 @@ describe('IterableMapper', () => {
           loopCount++;
           iteratedValues.push(value);
         }
-      }).rejects.toThrow('throw on 2nd');
+      }).rejects.toMatchObject({
+        name: 'AggregateError',
+        errors: Array.from({ length: 1 }, () =>
+          expect.objectContaining({ message: 'throw on 2nd' }),
+        ),
+      });
       await sleep(300);
       expect(loopCount).toBe(2);
       expect(mappedValues).toEqual([1, 2, 3]);
@@ -662,7 +746,12 @@ describe('IterableMapper', () => {
           loopCount++;
           iteratedValues.push(value);
         }
-      }).rejects.toThrow('throw on each');
+      }).rejects.toMatchObject({
+        name: 'AggregateError',
+        errors: Array.from({ length: 10 }, () =>
+          expect.objectContaining({ message: 'throw on each' }),
+        ),
+      });
       expect(loopCount).toBe(0);
       expect(mappedValues).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
       expect(iteratedValues).toEqual([]);
@@ -837,7 +926,12 @@ describe('IterableMapper', () => {
           loopCount++;
           iteratedValues.push(value);
         }
-      }).rejects.toThrow('throw on 1st');
+      }).rejects.toMatchObject({
+        name: 'AggregateError',
+        errors: Array.from({ length: 1 }, () =>
+          expect.objectContaining({ message: 'throw on 1st' }),
+        ),
+      });
       await sleep(300);
       expect(loopCount).toBe(2);
       expect(mappedValues).toEqual([1, 3, 2]);
@@ -868,7 +962,12 @@ describe('IterableMapper', () => {
           loopCount++;
           iteratedValues.push(value);
         }
-      }).rejects.toThrow('throw on 2nd');
+      }).rejects.toMatchObject({
+        name: 'AggregateError',
+        errors: Array.from({ length: 1 }, () =>
+          expect.objectContaining({ message: 'throw on 2nd' }),
+        ),
+      });
       await sleep(300);
       expect(loopCount).toBe(2);
       expect(mappedValues).toEqual([1, 3, 2]);
@@ -893,7 +992,12 @@ describe('IterableMapper', () => {
           loopCount++;
           iteratedValues.push(value);
         }
-      }).rejects.toThrow('throw on each');
+      }).rejects.toMatchObject({
+        name: 'AggregateError',
+        errors: Array.from({ length: 10 }, () =>
+          expect.objectContaining({ message: 'throw on each' }),
+        ),
+      });
       expect(loopCount).toBe(0);
       expect(mappedValues).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
       expect(iteratedValues).toEqual([]);
@@ -1127,7 +1231,12 @@ describe('IterableMapper', () => {
           loopCount++;
           iteratedValues.push(value);
         }
-      }).rejects.toThrow('throw on each');
+      }).rejects.toMatchObject({
+        name: 'AggregateError',
+        errors: Array.from({ length: 10 }, () =>
+          expect.objectContaining({ message: 'throw on each' }),
+        ),
+      });
       expect(loopCount).toBe(0);
       expect(mappedValues).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
       expect(iteratedValues).toEqual([]);

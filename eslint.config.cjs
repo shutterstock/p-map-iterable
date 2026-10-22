@@ -5,9 +5,19 @@ const prettier = require('eslint-plugin-prettier/recommended');
 const globals = require('globals');
 
 module.exports = [
-  { ignores: ['dist/**', 'docs/**', 'coverage/**', '**/cdk.out/**'] },
   {
-    files: ['**/*.ts', '**/*.tsx'],
+    ignores: [
+      'dist/**',
+      'docs/**',
+      'coverage/**',
+      '**/cdk.out/**',
+      'tests/package/**',
+      '.package-tests-*/**',
+      '.validation-tools/**',
+    ],
+  },
+  {
+    files: ['**/*.ts', '**/*.tsx', '**/*.mts'],
     languageOptions: {
       parser,
       parserOptions: { project: './tsconfig.json', tsconfigRootDir: __dirname },
@@ -29,5 +39,8 @@ module.exports = [
       '@typescript-eslint/await-thenable': 'error',
     },
   },
-  { files: ['**/*.ts', '**/*.tsx'], plugins: { prettier: require('eslint-plugin-prettier') } },
+  {
+    files: ['**/*.ts', '**/*.tsx', '**/*.mts'],
+    plugins: { prettier: require('eslint-plugin-prettier') },
+  },
 ];

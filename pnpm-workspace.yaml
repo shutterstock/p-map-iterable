@@ -15,3 +15,5 @@ allowBuilds:
 overrides:
   # NYC uses yaml.load(); v4 removes argparse 1's unpatched sprintf-js dependency.
   '@istanbuljs/load-nyc-config>js-yaml': '4.3.2'
+  # Keep Mermaid 11's dependency/license set while using the patched math renderer.
+  'mermaid@11>katex': '0.18.10'

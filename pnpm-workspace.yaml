@@ -11,3 +11,7 @@ pmOnFail: ignore
 allowBuilds:
   '@parcel/watcher': true
   unrs-resolver: true
+
+overrides:
+  # NYC uses yaml.load(); v4 removes argparse 1's unpatched sprintf-js dependency.
+  '@istanbuljs/load-nyc-config>js-yaml': '4.3.2'

@@ -167,10 +167,10 @@ These diagrams illustrate the differences in operation betweeen `p-map`, `p-queu
   - Adds items to the queue via the `enqueue` method
 - [IterableQueueMapperSimple](https://tech.shutterstock.com/p-map-iterable/classes/IterableQueueMapperSimple.html)
   - Also exported as `WorkerQueue`
-  - Wraps `IterableQueueMapper`
-  - Discards results as they become available
+  - Runs queued work with separate limits on concurrency and unfinished inputs
+  - Discards worker results
   - Exposes any accumulated errors through the `errors` property instead of throwing an `AggregateError`
-  - Consumes results internally and exposes no result iterator
+  - Exposes no result iterator
 
 ## Lower Level Utilities
 - [IterableQueue](https://tech.shutterstock.com/p-map-iterable/classes/IterableQueue.html)
@@ -241,13 +241,59 @@ Matching option types are available from the package root using `import type`:
 | --- | --- | --- |
 | `ConcurrentMapperOptions` | `IterableMapperOptions` | `concurrency`, `maxUnread`, `stopOnMapperError` |
 | `MappingQueueOptions` | `IterableQueueMapperOptions` | `concurrency`, `maxUnread`, `stopOnMapperError` |
-| `WorkerQueueOptions` | `IterableQueueMapperSimpleOptions` | `concurrency` |
+| `WorkerQueueOptions` | `IterableQueueMapperSimpleOptions` | `concurrency`, `maxQueueDepth` |
 
 `MappingQueue` must have a result consumer even when you do not need the results. Awaiting every enqueue before starting iteration can block once the result buffer fills. Use `WorkerQueue` when results can be discarded. Its `onIdle()` permanently ends input; subsequent enqueues reject. Worker failures are collected in `errors` while other inputs continue to run, so check that property after shutdown.
 
 Each queue uses one fixed callback supplied at construction. Awaiting `enqueue()` provides producer backpressure and confirms acceptance of an input. Calling it without awaiting can accumulate pending inputs. For ongoing event-driven work, the application supplies any admission limits, cancellation, deduplication, or per-item completion handles. `WorkerQueue.onIdle()` is a final shutdown operation, so an application that needs reusable idle waits must manage that separately.
 
 See [examples/semantic-aliases.ts](./examples/semantic-aliases.ts) for metadata enrichment, queued capability probes with a concurrent result consumer, and background status checks with collected errors. Run it with `pnpm run example:semantic-aliases`.
+
+## Buffering bursts of ordered writes
+
+A producer may prepare batches in bursts while a destination requires sequential writes.
+`concurrency: 1` preserves write order. Increasing `maxQueueDepth` lets the producer prepare
+several batches ahead without increasing the number of writes running at once:
+
+```typescript
+const flusher = new IterableQueueMapperSimple(writeBatch, {
+  concurrency: 1,
+  maxQueueDepth: 8,
+});
+
+try {
+  for await (const batch of preparedBatches) {
+    await flusher.enqueue(batch);
+  }
+} finally {
+  await flusher.onIdle();
+}
+
+// Mapper failures are collected; they do not stop subsequent writes or reject onIdle().
+for (const { item, error } of flusher.errors) {
+  reportFailedBatch(item, error);
+}
+```
+
+`maxQueueDepth` counts **all admitted, unfinished items**, including running mappers. With
+the configuration above, one batch can run and seven can wait; the ninth enqueue waits
+until a write settles. An enqueue resolves on admission, not completion. The default is
+`maxQueueDepth = concurrency`, preserving the existing behavior without a waiting backlog.
+The value must be a positive safe integer or `Infinity`, and at least `concurrency`.
+
+This buffer absorbs short producer bursts; it does not increase the destination's write
+rate. The limit counts items rather than bytes. Always await each enqueue: parallel,
+unawaited calls can accumulate blocked promises and retain their inputs outside the
+admitted-work limit. `Infinity` disables admission backpressure.
+
+Writes start in FIFO order. At concurrency greater than one they can finish out of order.
+`onIdle()` closes input immediately, drains every enqueue called before it (including
+blocked calls), and rejects later enqueue calls. It is terminal, not a reusable wait for
+a temporarily empty queue. Callers that require processing to stop after a failed write
+should handle that policy in their mapper; the default continues and collects failures.
+
+Run `pnpm run example:queue-depth-control` for a small ordered-write demonstration with
+simulated I/O.
 
 # Contributing - Setting up Build Environment
 

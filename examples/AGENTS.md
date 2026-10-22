@@ -8,6 +8,7 @@ Read the [root guide](../AGENTS.md). Check the
 | [iterable-mapper.ts](iterable-mapper.ts) | Prefetch from an async source. Consume results with backpressure. | `pnpm run example:iterable-mapper` |
 | [iterable-queue-mapper.ts](iterable-queue-mapper.ts) | Queue inputs while consuming results. Collect mapper failures at the end. | `pnpm run example:iterable-queue-mapper` |
 | [iterable-queue-mapper-simple.ts](iterable-queue-mapper-simple.ts) | Run a fixed worker. Discard results and inspect errors after shutdown. | `pnpm run example:iterable-queue-mapper-simple` |
+| [queue-depth-control.ts](queue-depth-control.ts) | Buffer ordered writes with an opt-in backlog independent of concurrency. | `pnpm run example:queue-depth-control` |
 | [semantic-aliases.ts](semantic-aliases.ts) | Use `ConcurrentMapper`, `MappingQueue`, and `WorkerQueue`. | `pnpm run example:semantic-aliases` |
 
 Run commands from the repository root. The scripts use `ts-node` and

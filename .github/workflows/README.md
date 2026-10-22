@@ -38,7 +38,12 @@ additional files can use its newline-separated `cache-inputs` input.
 
 CI checkouts explicitly select `github.sha`. Publication validates the event tag
 before dependency work and pins producer/build/docs to the exported validated
-commit. Source versions are materialized only after restoring dependencies.
+commit through `needs.select-release.outputs.validated-revision`. The output
+name avoids CodeQL's heuristic that treats fields containing `commit` as PR
+checkout references, even in release-only workflows. The value remains the
+immutable SHA checked against the explicit tag and train ancestry by
+`release-metadata`. Source versions are materialized only after restoring
+dependencies.
 Manual docs producer/build select the same dispatch SHA.
 
 Every strict consumer keeps `PNPM_CONFIG_VERIFY_DEPS_BEFORE_RUN: 'false'` at job
